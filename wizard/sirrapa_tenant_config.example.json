@@ -1,0 +1,162 @@
+{
+  "$schema": "https://quorima.ai/schemas/tenant-config-v1.json",
+  "tenant_id": "sirrapa-group-2026",
+  "deployment": {
+    "mode": "saas",
+    "region": "eu-west",
+    "anthropic_workspace": {
+      "type": "platform.claude.com",
+      "workspace_name": "sirrapa-group-quorima",
+      "default_model_overrides": {
+        "ceo_agent": "claude-opus-4-6",
+        "cfo_agent": "claude-opus-4-6",
+        "coo_agent": "claude-sonnet-4-6",
+        "cmo_agent": "claude-sonnet-4-6",
+        "chief_of_staff": "claude-opus-4-6",
+        "sub_agents": "claude-haiku-4-5"
+      }
+    }
+  },
+  "holding": {
+    "legal_name": "Sirrapa Group Holding B.V.",
+    "kvk_number": null,
+    "ultimate_beneficial_owner": "Armand Parris",
+    "reporting_currency": "EUR",
+    "fiscal_year_start": "01-01",
+    "consolidation_gaap": "nl-gaap",
+    "twinfield": {
+      "organisation_code": "KUBUSALKMAAR",
+      "auth_method": "wolters_kluwer_sso",
+      "holding_office_code": "21006",
+      "note": "Holding heeft eigen administratie voor mgmt fees / intercompany / consolidation entries"
+    }
+  },
+  "entities": [
+    {
+      "id": "sirrapa-ict",
+      "legal_name": "Sirrapa (ICT) B.V.",
+      "country": "NL",
+      "currency": "EUR",
+      "gaap": "nl-gaap",
+      "template": "ICT-Solo-Freelance",
+      "connectors": {
+        "accounting": { "vendor": "Twinfield", "office_code": "21005", "oauth_status": "pending" },
+        "crm": { "vendor": "HubSpot", "oauth_status": "pending", "tier": "free" }
+      },
+      "manual_inputs_required": [],
+      "kpi_overrides": [],
+      "thresholds_overrides": {
+        "monthly_billed_revenue.target_eur": 18000,
+        "monthly_passive_revenue.target_eur": 5000,
+        "monthly_passive_revenue.long_term_target_eur": 20000
+      },
+      "growth_tracks_active": [
+        "proptech-niche",
+        "productized-retainer",
+        "subcontract-agency",
+        "reseller-msp"
+      ]
+    },
+    {
+      "id": "sirrapa-vastgoed",
+      "legal_name": "Sirrapa Vastgoed B.V.",
+      "country": "NL",
+      "currency": "EUR",
+      "gaap": "nl-gaap",
+      "template": "Property-Income-Geared",
+      "connectors": {
+        "accounting": { "vendor": "Twinfield", "office_code": "21007", "vastgoed_module_active": false, "oauth_status": "pending" },
+        "property_management": { "vendor": "Twinfield-derived + manual lease summary" },
+        "bank_feed": { "vendor": "Ponto", "oauth_status": "pending" }
+      },
+      "data_source_strategy": "Twinfield grootboek = primaire bron voor financiële data (P&L, B/S, transactions, loan-register, rentelasten). Vastgoed-module is NIET actief, dus huurcontract-metadata (looptijd, indexering, break-options, WAULT) is niet gestructureerd beschikbaar — wordt eenmalig via 'lease summary' upload of contract-PDF parsing geïmporteerd, daarna in Quorima's eigen contract-store onderhouden.",
+      "manual_inputs_required": [
+        "lease_summary.csv (eenmalig — per huurder: contract_start, contract_end, monthly_rent, indexation_clause, break_options)"
+      ],
+      "kpi_overrides": [],
+      "thresholds_overrides": {}
+    },
+    {
+      "id": "sirrapa-property-uk",
+      "legal_name": "Sirrapa Property Group Ltd.",
+      "country": "GB",
+      "currency": "GBP",
+      "gaap": "frs-102",
+      "template": "Property-C2R-Acquisition-Phase",
+      "active_phase": "acquisition",
+      "future_phase_template": "Property-Develop-to-Hold",
+      "phase_switch_trigger": "first_project_acquired",
+      "strategy": "Commercial-to-Residential (C2R) onder UK Permitted Development rights",
+      "connectors": {
+        "accounting": {
+          "vendor": "Xero",
+          "organisation_short_code": "!9dW75",
+          "organisation_uuid": "auto-captured-at-oauth-callback",
+          "user_role": "Advisor",
+          "oauth_status": "pending"
+        },
+        "deal_pipeline": { "vendor": "HubSpot", "oauth_status": "pending", "tier": "free" },
+        "bank_feed": { "vendor": "TrueLayer", "oauth_status": "pending" }
+      },
+      "manual_inputs_required": [],
+      "kpi_overrides": [],
+      "thresholds_overrides": {}
+    }
+  ],
+  "cross_entity": {
+    "intercompany_detection": true,
+    "intercompany_match_threshold": { "abs_eur": 1000, "rel_pct": 0.5 },
+    "fx_strategy": {
+      "pnl_lines": "period_average",
+      "balance_sheet_lines": "period_close",
+      "ocr_translation_diff": "to_oci"
+    },
+    "consolidation_calendar": {
+      "daily_flash_at": "08:00",
+      "daily_flash_tz": "Europe/Amsterdam",
+      "weekly_digest_at": "Mon 09:00",
+      "monthly_close_business_day": 5
+    }
+  },
+  "board_config": {
+    "agents_active": ["chief_of_staff", "ceo", "cfo", "coo", "cmo"],
+    "channels": {
+      "slack_workspace_id": null,
+      "email_recipients": ["armand.parris@sirrapagroup.com"]
+    },
+    "report_cadence": {
+      "daily_flash": ["cfo"],
+      "weekly_digest": ["ceo", "cfo", "cmo"],
+      "monthly_close": ["cfo", "ceo"],
+      "ad_hoc": ["ceo", "cfo", "cmo", "coo"]
+    },
+    "escalation_routing": {
+      "default_human_recipient": "armand.parris@sirrapagroup.com",
+      "channel": "email_and_slack",
+      "severity_thresholds": {
+        "info": "log_only",
+        "warning": "email",
+        "critical": "email_and_slack_at_channel"
+      }
+    }
+  },
+  "permissions": [
+    {
+      "user_email": "armand.parris@sirrapagroup.com",
+      "role": "owner",
+      "scope": "all_entities"
+    }
+  ],
+  "compliance": {
+    "data_processor_agreement_signed": false,
+    "dpia_required": true,
+    "anthropic_zero_retention_requested": true,
+    "data_residency": "eu-west"
+  },
+  "billing": {
+    "tier": "Holding-SaaS",
+    "stripe_customer_id": null,
+    "soft_cap_tokens_per_month": null,
+    "trial_until": "2026-05-26"
+  }
+}

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 120" role="img" aria-label="Quorima horizontal lockup, dark version">
+  <title>Quorima — horizontale lockup voor donkere achtergrond</title>
+  <g transform="translate(10,10)">
+    <circle cx="50" cy="50" r="42" fill="none" stroke="#a78bda" stroke-width="4"/>
+    <circle cx="50" cy="8" r="8" fill="#a78bda"/>
+    <circle cx="89.94" cy="37.02" r="5.5" fill="#a78bda"/>
+    <circle cx="74.69" cy="83.98" r="5.5" fill="#a78bda"/>
+    <circle cx="25.31" cy="83.98" r="5.5" fill="#a78bda"/>
+    <circle cx="10.06" cy="37.02" r="5.5" fill="#a78bda"/>
+    <circle cx="50" cy="50" r="2.6" fill="#a78bda" opacity="0.6"/>
+  </g>
+  <text x="140" y="78" font-family="Lato, 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" font-size="56" font-weight="700" fill="#f7f8fb" letter-spacing="-1.3">quorima</text>
+</svg>

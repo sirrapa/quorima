@@ -1,0 +1,140 @@
+{
+  "entity": {
+    "id": "sirrapa-vastgoed",
+    "legalName": "Sirrapa Vastgoed B.V.",
+    "country": "NL",
+    "currency": "EUR",
+    "gaap": "nl-gaap"
+  },
+  "accounts": [
+    { "code": "1010", "name": "Bank ABN", "type": "asset" },
+    { "code": "0700", "name": "Hypotheek pand Tuitjenhorn", "type": "liability" },
+    { "code": "0710", "name": "Hypotheek pand Den Oever", "type": "liability" },
+    { "code": "0720", "name": "Mezz lening private investor", "type": "liability" },
+    { "code": "4400", "name": "Rentelasten hypotheek", "type": "expense" },
+    { "code": "4410", "name": "Rentelasten mezz", "type": "expense" },
+    { "code": "4100", "name": "Onderhoud", "type": "expense" },
+    { "code": "4150", "name": "Property management fees", "type": "expense" },
+    { "code": "4200", "name": "Energie & nutsvoorzieningen", "type": "expense" },
+    { "code": "4300", "name": "Verzekeringen", "type": "expense" },
+    { "code": "8000", "name": "Huuropbrengsten zakelijk", "type": "income" },
+    { "code": "8010", "name": "Huuropbrengsten parking", "type": "income" }
+  ],
+  "pnl12m": {
+    "entityId": "sirrapa-vastgoed",
+    "period": { "year": 2026, "period": "FY" },
+    "currency": "EUR",
+    "lines": [
+      { "account": "8000", "name": "Huuropbrengsten zakelijk", "amount": 168000 },
+      { "account": "8010", "name": "Huuropbrengsten parking", "amount": 9600 },
+      { "account": "4100", "name": "Onderhoud", "amount": -14400 },
+      { "account": "4150", "name": "Property management fees", "amount": -10200 },
+      { "account": "4200", "name": "Energie & nutsvoorzieningen", "amount": -8400 },
+      { "account": "4300", "name": "Verzekeringen", "amount": -6800 },
+      { "account": "4400", "name": "Rentelasten hypotheek", "amount": -98700 },
+      { "account": "4410", "name": "Rentelasten mezz", "amount": -42000 }
+    ],
+    "totals": {
+      "revenue": 177600,
+      "operatingExpenses": 39800,
+      "interestExpense": 140700,
+      "depreciation": 24000,
+      "tax": 0,
+      "netResult": -26900
+    }
+  },
+  "balanceSheet": {
+    "entityId": "sirrapa-vastgoed",
+    "asOf": "2026-04-26",
+    "currency": "EUR",
+    "lines": [
+      { "account": "0100", "name": "Vastgoed in exploitatie", "amount": 2850000, "side": "asset" },
+      { "account": "1010", "name": "Bank ABN", "amount": 18400, "side": "asset" },
+      { "account": "0700", "name": "Hypotheek pand Tuitjenhorn", "amount": -1180000, "side": "liability" },
+      { "account": "0710", "name": "Hypotheek pand Den Oever", "amount": -820000, "side": "liability" },
+      { "account": "0720", "name": "Mezz lening private investor", "amount": -350000, "side": "liability" },
+      { "account": "0500", "name": "Eigen vermogen", "amount": -518400, "side": "equity" }
+    ],
+    "totals": {
+      "totalAssets": 2868400,
+      "totalLiabilities": 2350000,
+      "totalEquity": 518400
+    }
+  },
+  "loans": [
+    {
+      "id": "loan-tuitjenhorn",
+      "lender": "ABN AMRO Real Estate",
+      "balance": 1180000,
+      "currency": "EUR",
+      "rate": 0.062,
+      "nextRepricingDate": "2026-09-15",
+      "fixedPeriodEnd": "2026-09-15",
+      "monthlyPrincipal": 1500
+    },
+    {
+      "id": "loan-den-oever",
+      "lender": "Rabo Vastgoed",
+      "balance": 820000,
+      "currency": "EUR",
+      "rate": 0.058,
+      "nextRepricingDate": "2027-02-01",
+      "fixedPeriodEnd": "2027-02-01",
+      "monthlyPrincipal": 1100
+    },
+    {
+      "id": "loan-mezz",
+      "lender": "Private investor (NL)",
+      "balance": 350000,
+      "currency": "EUR",
+      "rate": 0.12,
+      "nextRepricingDate": null,
+      "fixedPeriodEnd": "2027-12-31",
+      "monthlyPrincipal": 0
+    }
+  ],
+  "tenancies": [
+    {
+      "id": "tenant-1",
+      "tenantName": "Logistiek Noord-Holland B.V.",
+      "monthlyRent": 7800,
+      "contractStart": "2024-01-01",
+      "contractEnd": "2028-12-31",
+      "indexation": "CPI",
+      "breakOption": "2026-12-31"
+    },
+    {
+      "id": "tenant-2",
+      "tenantName": "MedCare Praktijk B.V.",
+      "monthlyRent": 4200,
+      "contractStart": "2023-06-01",
+      "contractEnd": "2030-05-31",
+      "indexation": "CPI+1%",
+      "breakOption": null
+    },
+    {
+      "id": "tenant-3",
+      "tenantName": "Bloemenkas Holland B.V.",
+      "monthlyRent": 2800,
+      "contractStart": "2025-09-01",
+      "contractEnd": "2027-08-31",
+      "indexation": "fixed 3%/y",
+      "breakOption": null
+    },
+    {
+      "id": "parking-block",
+      "tenantName": "diverse parking",
+      "monthlyRent": 800,
+      "contractStart": "2024-01-01",
+      "contractEnd": null,
+      "indexation": null,
+      "breakOption": null
+    }
+  ],
+  "transactions": [
+    { "id": "tx-001", "entityId": "sirrapa-vastgoed", "date": "2026-04-25", "account": "8000", "description": "Huur Q2 Logistiek Noord-Holland", "debit": 0, "credit": 23400, "currency": "EUR" },
+    { "id": "tx-002", "entityId": "sirrapa-vastgoed", "date": "2026-04-25", "account": "1010", "description": "Cash in - huur Q2 LNH", "debit": 23400, "credit": 0, "currency": "EUR" },
+    { "id": "tx-003", "entityId": "sirrapa-vastgoed", "date": "2026-04-26", "account": "4400", "description": "Rentebetaling ABN april", "debit": 6098, "credit": 0, "currency": "EUR" },
+    { "id": "tx-004", "entityId": "sirrapa-vastgoed", "date": "2026-04-26", "account": "1010", "description": "Cash out - rente ABN", "debit": 0, "credit": 6098, "currency": "EUR" }
+  ]
+}
