@@ -33,6 +33,29 @@
   },
   "entities": [
     {
+      "id": "sirrapa-holding",
+      "legal_name": "Sirrapa Group Holding B.V.",
+      "country": "NL",
+      "currency": "EUR",
+      "gaap": "nl-gaap",
+      "template": "Holding-Consolidation",
+      "role": "consolidation_parent",
+      "note": "Eigen administratie (office 21006) voor mgmt fees / intercompany / consolidatie. De top-level 'holding'-blok blijft de consolidatie-root (kvk, fiscal year, gaap); deze entry maakt de holding-administratie een monitored entity met eigen KPI's en connectors, net als de werkmaatschappijen.",
+      "connectors": {
+        "accounting": { "vendor": "Twinfield", "office_code": "21006", "oauth_status": "pending" },
+        "bank_feed": { "vendor": "Ponto", "oauth_status": "pending" }
+      },
+      "manual_inputs_required": [
+        "committed_capital_calls.csv (toegezegde capital calls + schulddienst per entiteit, komende 6 mnd — voedt de dry-powder KPI)"
+      ],
+      "kpi_overrides": [],
+      "thresholds_overrides": {
+        "consolidated_net_cash_runway.green_months": 12,
+        "consolidated_net_cash_runway.red_months": 6,
+        "intercompany_and_mgmt_fee_coverage.coverage_red_below": 0.8
+      }
+    },
+    {
       "id": "sirrapa-ict",
       "legal_name": "Sirrapa (ICT) B.V.",
       "country": "NL",

@@ -46,7 +46,7 @@
 
 ## Entity-type templates — catalogus
 
-De wizard kent een groeiende set templates. **Per Sirrapa Group-tenant gebruiken we drie templates** (eentje per BV).
+De wizard kent een groeiende set templates. **Per Sirrapa Group-tenant gebruiken we vier templates** (eentje per werkmaatschappij plus `Holding-Consolidation` voor de holding zelf).
 
 ### Template `ICT-Solo-Freelance`
 Voor een ICT-vehikel met één natuurlijk persoon die freelance factureert (zoals Sirrapa ICT B.V.).
@@ -176,6 +176,51 @@ Voor property die ontwikkelt om te behouden voor income (zoals Sirrapa Property 
   },
   "default_chart_of_accounts_mapping": "uk-frs102-realestate-ltd",
   "primary_agents": ["CFO", "COO", "CEO"]
+}
+```
+
+### Template `Holding-Consolidation`
+Voor een pure holding boven werkmaatschappijen (zoals Sirrapa Group Holding B.V.). Geen operationele KPI's — de holding stuurt op kapitaalallocatie, groeps-liquiditeit en intercompany-hygiëne. Dit is de gerealiseerde, consolidatie-specifieke vorm van het generieke `Family-Office-Holding`-idee.
+
+```json
+{
+  "template_id": "Holding-Consolidation",
+  "label": "Holding — consolidatie & kapitaalallocatie",
+  "description": "Pure holding boven de werkmaatschappijen. Geen ops-KPIs; stuurt op groeps-liquiditeit, dry powder en intercompany-discipline.",
+  "default_kpis": [
+    {
+      "id": "consolidated_net_cash_runway",
+      "label": "Geconsolideerde netto cash + groeps-runway",
+      "formula": "net_cash = sum(cash_all_entities + holding) - debt_service_due_90d; runway_months = net_cash / consolidated_monthly_net_burn",
+      "thresholds": { "green": ">=12", "yellow": "6-12", "red": "<6" },
+      "escalation": "runway_months < 6 → CFO+CEO liquidity protocol; runway_months <= entity('sirrapa-vastgoed').refi_runway → escalate_to_human()"
+    },
+    {
+      "id": "free_deployable_capital",
+      "label": "Vrije allocatie-ruimte (dry powder)",
+      "formula": "net_cash - opco_operating_buffer(~3m opex) - committed_capital_calls_6m - debt_service_6m",
+      "thresholds": { "green": ">=committed_calls_6m + vastgoed_refi_gap", "yellow": "covers one", "red": "covers neither" },
+      "escalation": "free_deployable_capital < vastgoed_refi_gap → CEO capital-allocation beslissing (UK pauzeren of externe funding)"
+    },
+    {
+      "id": "intercompany_and_mgmt_fee_coverage",
+      "label": "Intercompany-discipline + mgmt-fee dekking",
+      "formula": "ic_unreconciled = abs(net_intercompany_not_eliminated); mgmt_fee_coverage = mgmt_fee_income / holding_standalone_opex",
+      "thresholds": {
+        "green": "ic_unreconciled<=1000 AND no_item>90d AND coverage>=1.0",
+        "yellow": "ic drift unknown OR coverage 0.8-1.0",
+        "red": "item>90d OR coverage<0.8"
+      },
+      "escalation": "mgmt_fee_coverage < 0.8 OR ic_unreconciled > cross_entity.threshold at monthly close → CFO flag"
+    }
+  ],
+  "default_connectors": {
+    "accounting": ["Twinfield"],
+    "consolidation": ["Quorima-native (multi-entity rollup)"],
+    "bank_feed_optional": ["Ponto", "TrueLayer"]
+  },
+  "default_chart_of_accounts_mapping": "nl-gaap-holding-consolidation",
+  "primary_agents": ["CFO", "CEO", "Chief-of-Staff"]
 }
 ```
 

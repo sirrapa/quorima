@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quorima - Management dashboard - Sirrapa Group Holding</title>
+<link rel="icon" href="../branding/logo/quorima-favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --purple:#6b46c1; --purple-light:#a78bda; --purple-tint:#ede9fe;
+  --navy:#1f3864; --charcoal:#1a2233; --grey:#6b7387;
+  --green:#16a34a; --amber:#f59e0b; --red:#dc2626;
+  --surface:#f7f8fb; --card:#ffffff; --line:#e6e8ef; --text:#1a2233; --muted:#6b7387;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --surface:#0f172a; --card:#161f33; --line:#26304a; --text:#f7f8fb; --muted:#9aa3b8; --purple:#a78bda; }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--surface);color:var(--text);
+  font-family:"Lato","Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  line-height:1.6;padding:28px 20px 48px}
+.wrap{max-width:1080px;margin:0 auto}
+header{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.mark{flex:none}
+h1{font-size:22px;font-weight:700;margin:0;letter-spacing:-0.01em}
+.sub{font-size:14px;color:var(--muted);margin:2px 0 0}
+.note{display:flex;gap:8px;align-items:flex-start;font-size:13px;color:var(--muted);
+  background:var(--card);border:0.5px solid var(--line);border-radius:10px;padding:10px 14px;margin:16px 0 0}
+.metrics{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-top:22px}
+.metric{background:var(--card);border:0.5px solid var(--line);border-radius:12px;padding:14px 16px}
+.metric .lab{font-size:13px;color:var(--muted)}
+.metric .val{font-size:26px;font-weight:700;margin-top:4px}
+h2{font-size:14px;font-weight:700;color:var(--muted);margin:30px 0 10px;text-transform:none}
+.card{background:var(--card);border:0.5px solid var(--line);border-radius:12px;padding:6px 16px}
+.flag{display:flex;gap:12px;align-items:flex-start;padding:11px 0;border-top:0.5px solid var(--line)}
+.flag:first-child{border-top:0}
+.chip{display:inline-block;font-size:12px;font-weight:700;padding:2px 9px;border-radius:7px;white-space:nowrap}
+.c-red{background:rgba(220,38,38,.12);color:var(--red)}
+.c-amber{background:rgba(245,158,11,.14);color:#b45309}
+.c-info{background:rgba(107,70,193,.12);color:var(--purple)}
+.c-green{background:rgba(22,163,74,.12);color:var(--green)}
+.c-grey{background:rgba(107,115,135,.14);color:var(--muted)}
+.flag .t{font-size:14px}
+.flag .s{font-size:12px;color:var(--muted);margin-top:1px}
+.cols{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.ent{background:var(--card);border:0.5px solid var(--line);border-radius:12px;padding:16px}
+.ent h3{font-size:15px;font-weight:700;margin:0}
+.tags{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 4px}
+.kpi{display:flex;gap:9px;align-items:flex-start;padding:9px 0;border-top:0.5px solid var(--line)}
+.dot{width:9px;height:9px;border-radius:50%;margin-top:6px;flex:none}
+.d-red{background:var(--red)} .d-amber{background:var(--amber)} .d-green{background:var(--green)} .d-grey{background:var(--grey)}
+.kpi .n{font-size:13px} .kpi .m{font-size:12px;color:var(--muted);margin-top:1px}
+.pills{display:flex;flex-wrap:wrap;gap:8px}
+.foot{font-size:13px;color:var(--muted);line-height:1.8}
+.legend{font-size:12px;color:var(--muted);margin-top:36px;border-top:0.5px solid var(--line);padding-top:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <svg class="mark" width="44" height="44" viewBox="0 0 100 100" role="img" aria-label="Quorima mark">
+    <circle cx="50" cy="50" r="42" fill="none" stroke="var(--purple)" stroke-width="5"/>
+    <circle cx="50" cy="8" r="8" fill="var(--purple)"/>
+    <circle cx="89.94" cy="37.02" r="5.5" fill="var(--purple)"/>
+    <circle cx="74.69" cy="83.98" r="5.5" fill="var(--purple)"/>
+    <circle cx="25.31" cy="83.98" r="5.5" fill="var(--purple)"/>
+    <circle cx="10.06" cy="37.02" r="5.5" fill="var(--purple)"/>
+    <circle cx="50" cy="50" r="2.6" fill="var(--purple)" opacity="0.45"/>
+  </svg>
+  <div>
+    <h1>Quorima - Management dashboard</h1>
+    <p class="sub">Sirrapa Group Holding B.V. &middot; momentopname 13 juni 2026</p>
+  </div>
+</header>
+
+<div class="note">
+  <span>Statische momentopname. Connectors zijn nog niet gekoppeld (OAuth pending), dus waarden zijn targets of mock uit de CFO-MVP (27 apr 2026); admin-items zijn live uit Gmail. Conform de CFO-regel: geen cijfer zonder bron.</span>
+</div>
+
+<div class="metrics">
+  <div class="metric"><div class="lab">Board-agents</div><div class="val">5 actief</div></div>
+  <div class="metric"><div class="lab">Connectors live</div><div class="val">0 / 5</div></div>
+  <div class="metric"><div class="lab">Open flags</div><div class="val">6</div></div>
+  <div class="metric"><div class="lab">Billing-trial</div><div class="val" style="color:var(--amber)">verlopen</div></div>
+</div>
+
+<h2>Flags en escalaties</h2>
+<div class="card">
+  <div class="flag"><span class="chip c-red">Kritiek</span><div><div class="t">Vastgoed DSCR 0,80 onder 1,0 en refi-runway 4,6 mnd</div><div class="s">CFO &middot; covenant en herfinanciering &middot; mock 27 apr</div></div></div>
+  <div class="flag"><span class="chip c-info">Actie</span><div><div class="t">2 facturen vervallen 14 juni: Kubus 763,93 en 614,00 euro</div><div class="s">CFO admin &middot; live uit Gmail</div></div></div>
+  <div class="flag"><span class="chip c-info">Actie</span><div><div class="t">Basecone-draft factuur 2490067 wacht op goedkeuring</div><div class="s">CFO admin &middot; live uit Gmail</div></div></div>
+  <div class="flag"><span class="chip c-amber">Let op</span><div><div class="t">Billing-trial verlopen op 26 mei 2026</div><div class="s">ops &middot; tenant-config</div></div></div>
+  <div class="flag"><span class="chip c-amber">Let op</span><div><div class="t">UK: Q1-2026 Heads of Terms-milestone niet aantoonbaar gehaald</div><div class="s">CEO &middot; acquisitie-fase</div></div></div>
+  <div class="flag"><span class="chip c-amber">Let op</span><div><div class="t">ICT: 100% klant-concentratie</div><div class="s">CEO en CMO &middot; strategisch risico</div></div></div>
+</div>
+
+<h2>Holding en werkmaatschappijen - must-watch KPIs</h2>
+<div class="cols">
+  <div class="ent">
+    <h3>Sirrapa Group Holding B.V.</h3>
+    <div class="tags"><span class="chip c-info">holding</span><span class="chip c-grey">Chief of Staff + CFO</span><span class="chip c-grey">Twinfield 21006</span></div>
+    <div class="kpi"><span class="dot d-grey"></span><div><div class="n">Geconsolideerde netto cash + groeps-runway</div><div class="m">geen live data &middot; rood < 6 mnd &middot; Twinfield + Xero + bankfeeds</div></div></div>
+    <div class="kpi"><span class="dot d-grey"></span><div><div class="n">Vrije allocatie-ruimte (dry powder)</div><div class="m">geen live data &middot; dekt UK of Vastgoed-refi? &middot; afgeleid uit cash</div></div></div>
+    <div class="kpi"><span class="dot d-grey"></span><div><div class="n">Intercompany + mgmt-fee dekking</div><div class="m">drempel 1.000 euro / 0,5% &middot; coverage doel ≥ 1,0 &middot; geen live data</div></div></div>
+  </div>
+  <div class="ent">
+    <h3>Sirrapa (ICT) B.V.</h3>
+    <div class="tags"><span class="chip c-grey">CMO + CEO</span><span class="chip c-grey">Twinfield 21005</span></div>
+    <div class="kpi"><span class="dot d-grey"></span><div><div class="n">Klant-concentratie</div><div class="m">geen live data &middot; rood boven 70% &middot; Twinfield</div></div></div>
+    <div class="kpi"><span class="dot d-grey"></span><div><div class="n">Effectieve maandomzet</div><div class="m">target 18.000 euro &middot; geen live data &middot; Twinfield</div></div></div>
+    <div class="kpi"><span class="dot d-grey"></span><div><div class="n">Pipeline diversificatie</div><div class="m">doel 2 of meer &middot; geen live data &middot; HubSpot</div></div></div>
+  </div>
+  <div class="ent">
+    <h3>Sirrapa Vastgoed B.V.</h3>
+    <div class="tags"><span class="chip c-grey">CFO + CEO</span><span class="chip c-grey">Twinfield 21007</span></div>
+    <div class="kpi"><span class="dot d-red"></span><div><div class="n">DSCR 0,80</div><div class="m">rood &middot; doel 1,25 of meer &middot; mock 27 apr</div></div></div>
+    <div class="kpi"><span class="dot d-grey"></span><div><div class="n">NOI 11.483 euro/mnd</div><div class="m">geen budget geconfigureerd &middot; mock 27 apr</div></div></div>
+    <div class="kpi"><span class="dot d-red"></span><div><div class="n">Refi-runway 4,6 mnd</div><div class="m">rood &middot; WACC 6,92% &middot; mock 27 apr</div></div></div>
+  </div>
+  <div class="ent">
+    <h3>Sirrapa Property Group Ltd</h3>
+    <div class="tags"><span class="chip c-grey">CFO + COO</span><span class="chip c-grey">Xero &middot; GBP</span><span class="chip c-info">acquisitie-fase</span></div>
+    <div class="kpi"><span class="dot d-grey"></span><div><div class="n">Qualified pipeline GDV</div><div class="m">geen project &middot; groen vanaf 8 mln pond &middot; HubSpot</div></div></div>
+    <div class="kpi"><span class="dot d-grey"></span><div><div class="n">Time-to-LOI</div><div class="m">geen data &middot; doel 21 dagen of minder</div></div></div>
+    <div class="kpi"><span class="dot d-grey"></span><div><div class="n">Capital deployment</div><div class="m">geen data &middot; doel 0,60 tot 0,85 &middot; Xero</div></div></div>
+  </div>
+</div>
+
+<h2>Connectors</h2>
+<div class="pills">
+  <span class="chip c-amber">Twinfield &middot; te koppelen</span>
+  <span class="chip c-amber">Xero &middot; te koppelen</span>
+  <span class="chip c-amber">HubSpot &middot; te koppelen</span>
+  <span class="chip c-amber">Ponto &middot; te koppelen</span>
+  <span class="chip c-amber">TrueLayer &middot; te koppelen</span>
+  <span class="chip c-green">Gmail sirrapa.com &middot; live</span>
+</div>
+
+<h2>Board-cadans</h2>
+<div class="card" style="padding:14px 16px">
+  <div class="foot">Daily flash 08:00 (CFO) &middot; Weekly digest ma 09:00 (CEO/CFO/CMO) &middot; Monthly close werkdag 5 &middot; Escalaties naar armand.parris@sirrapagroup.com</div>
+</div>
+
+<div class="legend">
+  Legenda status: rood = onder drempel &middot; amber = let op &middot; groen = gezond &middot; grijs = geen live data.
+  Bronnen: <code>kpis/Holding_KPIs.md</code>, <code>kpis/KPIs_per_werkmaatschappij.md</code>, <code>kpis/UK_C2R_Acquisition_Phase_KPIs.md</code>, <code>wizard/sirrapa_tenant_config.example.json</code>, <code>quorima-mvp/output/flash-2026-04-27.md</code>, en de CFO-admin items uit de Gmail factuur-pipeline (MyBrain financial-control).
+</div>
+</div>
+</body>
+</html>
