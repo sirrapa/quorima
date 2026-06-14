@@ -72,30 +72,34 @@ h2{font-size:14px;font-weight:700;color:var(--muted);margin:30px 0 10px;text-tra
   </svg>
   <div>
     <h1>Quorima - Management dashboard</h1>
-    <p class="sub">Sirrapa Group Holding B.V. &middot; momentopname 13 juni 2026</p>
+    <p class="sub">Sirrapa Group Holding B.V. &middot; momentopname 14 juni 2026</p>
   </div>
 </header>
 
 <div class="note">
-  <span>Statische momentopname. Connectors zijn nog niet gekoppeld (OAuth pending), dus waarden zijn targets of mock uit de CFO-MVP (27 apr 2026); admin-items zijn live uit Gmail. Conform de CFO-regel: geen cijfer zonder bron.</span>
+  <span>Statische momentopname. Connectors zijn nog niet gekoppeld (OAuth pending), dus KPI-waarden zijn targets of mock uit de CFO-MVP (27 apr 2026). De openstaande facturen komen wel uit een echte feed: het Hermes Gmail-factuuroverzicht (<code>data/invoice-overview.json</code>). Conform de CFO-regel: geen cijfer zonder bron.</span>
 </div>
 
 <div class="metrics">
   <div class="metric"><div class="lab">Board-agents</div><div class="val">5 actief</div></div>
   <div class="metric"><div class="lab">Connectors live</div><div class="val">0 / 5</div></div>
-  <div class="metric"><div class="lab">Open flags</div><div class="val">6</div></div>
+  <div class="metric"><div class="lab">Open flags</div><div class="val" id="flag-count">6</div></div>
   <div class="metric"><div class="lab">Billing-trial</div><div class="val" style="color:var(--amber)">verlopen</div></div>
 </div>
 
 <h2>Flags en escalaties</h2>
-<div class="card">
+<div class="card" id="flags">
   <div class="flag"><span class="chip c-red">Kritiek</span><div><div class="t">Vastgoed DSCR 0,80 onder 1,0 en refi-runway 4,6 mnd</div><div class="s">CFO &middot; covenant en herfinanciering &middot; mock 27 apr</div></div></div>
-  <div class="flag"><span class="chip c-info">Actie</span><div><div class="t">2 facturen vervallen 14 juni: Kubus 763,93 en 614,00 euro</div><div class="s">CFO admin &middot; live uit Gmail</div></div></div>
-  <div class="flag"><span class="chip c-info">Actie</span><div><div class="t">Basecone-draft factuur 2490067 wacht op goedkeuring</div><div class="s">CFO admin &middot; live uit Gmail</div></div></div>
   <div class="flag"><span class="chip c-amber">Let op</span><div><div class="t">Billing-trial verlopen op 26 mei 2026</div><div class="s">ops &middot; tenant-config</div></div></div>
   <div class="flag"><span class="chip c-amber">Let op</span><div><div class="t">UK: Q1-2026 Heads of Terms-milestone niet aantoonbaar gehaald</div><div class="s">CEO &middot; acquisitie-fase</div></div></div>
   <div class="flag"><span class="chip c-amber">Let op</span><div><div class="t">ICT: 100% klant-concentratie</div><div class="s">CEO en CMO &middot; strategisch risico</div></div></div>
 </div>
+
+<h2>Openstaande facturen &middot; CFO-admin (Hermes)</h2>
+<div class="card" id="invoices">
+  <div class="flag"><span class="chip c-grey">…</span><div><div class="t">Factuur-feed laden…</div></div></div>
+</div>
+<div class="foot" id="invoices-meta" style="margin-top:6px"></div>
 
 <h2>Holding en werkmaatschappijen - must-watch KPIs</h2>
 <div class="cols">
@@ -149,5 +153,50 @@ h2{font-size:14px;font-weight:700;color:var(--muted);margin:30px 0 10px;text-tra
   Bronnen: <code>kpis/Holding_KPIs.md</code>, <code>kpis/KPIs_per_werkmaatschappij.md</code>, <code>kpis/UK_C2R_Acquisition_Phase_KPIs.md</code>, <code>wizard/sirrapa_tenant_config.example.json</code>, <code>quorima-mvp/output/flash-2026-04-27.md</code>, en de CFO-admin items uit de Gmail factuur-pipeline (MyBrain financial-control).
 </div>
 </div>
+<script>
+(function(){
+  var statusMap={
+    incasso:{cls:'c-info',label:'Incasso → Basecone'},
+    monitor:{cls:'c-amber',label:'Te betalen · monitor'},
+    'still-to-pay':{cls:'c-red',label:'Nog te betalen'},
+    'basecone-draft':{cls:'c-info',label:'Basecone-draft · approval'},
+    review:{cls:'c-grey',label:'Review'}
+  };
+  function eur(v){return v==null?'—':v.toLocaleString('nl-NL',{style:'currency',currency:'EUR'});}
+  function fmtDate(d){if(!d)return'';var p=d.split('-');return p[2]+'-'+p[1]+'-'+p[0];}
+  function due(d){
+    if(!d)return{txt:'geen vervaldatum',cls:'c-grey'};
+    var t=new Date();t.setHours(0,0,0,0);
+    var n=Math.round((new Date(d+'T00:00:00')-t)/86400000);
+    return{txt:n<0?Math.abs(n)+' dgn te laat':n===0?'vervalt vandaag':'over '+n+' dgn',cls:n<=0?'c-red':n<=7?'c-amber':'c-grey'};
+  }
+  function render(data){
+    var box=document.getElementById('invoices');
+    var inv=(data&&data.invoices)||[];
+    if(!inv.length){
+      box.innerHTML='<div class="flag"><span class="chip c-green">Leeg</span><div><div class="t">Geen openstaande facturen</div></div></div>';
+    }else{
+      box.innerHTML=inv.map(function(it){
+        var s=statusMap[it.status]||{cls:'c-grey',label:it.status||'—'};
+        var ent=it.entity?(it.entity+(it.office?' ('+it.office+')':'')):'entiteit te bevestigen';
+        var title=(it.supplier||'—')+(it.reference?' · '+it.reference:'')+' — '+eur(it.amount_eur);
+        var sub=ent+' &middot; '+(it.due_date?'vervalt '+fmtDate(it.due_date)+' &middot; '+due(it.due_date).txt:due(null).txt)+(it.note?' &middot; '+it.note:'');
+        return '<div class="flag"><span class="chip '+s.cls+'">'+s.label+'</span><div><div class="t">'+title+'</div><div class="s">'+sub+'</div></div></div>';
+      }).join('');
+    }
+    var meta=document.getElementById('invoices-meta');
+    meta.innerHTML=data&&data.generated_at?'Bron: '+(data.source||'Hermes Gmail-pipeline')+' &middot; account '+(data.account||'—')+' &middot; gegenereerd '+new Date(data.generated_at).toLocaleString('nl-NL'):'';
+    var fc=document.getElementById('flag-count');
+    if(fc)fc.textContent=document.querySelectorAll('#flags .flag').length+inv.length;
+  }
+  fetch('./data/invoice-overview.json',{cache:'no-store'})
+    .then(function(r){if(!r.ok)throw new Error(r.status);return r.json();})
+    .then(render)
+    .catch(function(){
+      document.getElementById('invoices').innerHTML='<div class="flag"><span class="chip c-grey">Geen feed</span><div><div class="t">Geen live factuur-feed bereikbaar</div><div class="s">Hermes schrijft <code>dashboard/data/invoice-overview.json</code>. Open via de Launch preview of een webserver om de feed te laden (lukt niet via file://).</div></div></div>';
+      document.getElementById('invoices-meta').textContent='';
+    });
+})();
+</script>
 </body>
 </html>

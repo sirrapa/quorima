@@ -4,7 +4,38 @@ Statische momentopname die als cockpit dient over de agentic C-suite van de hold
 
 ## Bestanden
 
-- `index.html` - het dashboard. Open in een browser of via de Launch preview.
+- `index.html` - het dashboard. Open via de Launch preview of een webserver (de factuur-feed laadt niet via `file://` wegens CORS).
+- `data/invoice-overview.json` - de live factuur-feed (CFO-admin). Zie "Factuur-feed (Hermes)".
+
+## Factuur-feed (Hermes)
+
+De sectie "Openstaande facturen - CFO-admin" wordt niet meer hardgecodeerd maar ingelezen uit `data/invoice-overview.json`. Dat is het koppelpunt met de **Hermes Gmail factuur-pipeline** (MyBrain `03. Areas/financial-control/`): Hermes/Freya genereert het overzicht en schrijft (of synct) het naar dit pad. Het dashboard fetcht het bij het laden; bij afwezigheid toont het netjes "geen feed".
+
+Contract `quorima.invoice-overview.v1`:
+
+```json
+{
+  "schema": "quorima.invoice-overview.v1",
+  "generated_at": "ISO-8601 met tz",
+  "source": "Hermes Gmail factuur-pipeline (Freya)",
+  "account": "armand.parris@sirrapa.com",
+  "invoices": [
+    {
+      "entity": "SIT|SVG|SGH|SPG|null",
+      "office": "21005|21006|21007|null",
+      "supplier": "string",
+      "reference": "factuur-/draftnummer",
+      "amount_eur": 0.0,
+      "due_date": "YYYY-MM-DD|null",
+      "status": "incasso|monitor|still-to-pay|basecone-draft|review",
+      "link": "gmail-permalink|null",
+      "note": "string|null"
+    }
+  ]
+}
+```
+
+`status` mapt op de drie routeringsklassen uit de unified spec (incasso/monitor/still-to-pay) plus `basecone-draft` (wacht op approval) en `review`. `office` is de Twinfield office-code = dezelfde codes als in de tenant-config en de Basecone-routing. De huidige `data/invoice-overview.json` is geseed met de echte items uit de Hermes-handoff van 13 juni; laat Hermes hem voortaan overschrijven.
 
 ## Datastatus (belangrijk)
 
@@ -12,7 +43,7 @@ Conform de CFO-regel "nooit een cijfer zonder bron":
 
 - Connectors (Twinfield, Xero, HubSpot, Ponto, TrueLayer) staan op `oauth_status: pending` in de tenant-config, dus er is nog geen live financiele data.
 - Getoonde KPI-waarden zijn targets/drempels of mock uit de CFO-MVP (`quorima-mvp/output/flash-2026-04-27.md`).
-- Admin-items (openstaande facturen, Basecone-draft) zijn live uit de Gmail factuur-pipeline (MyBrain financial-control).
+- Openstaande facturen (CFO-admin) komen uit de live feed `data/invoice-overview.json`, gevoed door de Hermes Gmail factuur-pipeline (MyBrain financial-control). Zie "Factuur-feed (Hermes)".
 
 ## Bronnen
 
