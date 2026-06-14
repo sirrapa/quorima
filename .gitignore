@@ -13,6 +13,9 @@ quorima-mvp/output/
 .env.local
 *.key
 *.pem
+# Twinfield OAuth token-store (bevat refresh_token)
+.twinfield-tokens.json
+*.twinfield-tokens.json
 
 # Editor / OS
 .DS_Store

@@ -51,38 +51,44 @@ cp .env.example .env
 npm run flash:mock
 ```
 
-Het verschil met dry-run: de CFO-agent (Claude Opus 4.6) herschrijft de briefing in
+Het verschil met dry-run: de CFO-agent (Claude Opus 4.8) herschrijft de briefing in
 natuurlijker Nederlands, met betere TL;DR en actie-aanbevelingen. Inputs naar de
 LLM zijn altijd grounded — zelfs Opus mag geen cijfers verzinnen, alle figures
 moeten traceren naar tool-calls.
 
-## Met echte Twinfield data
+## Met echte Twinfield data (OAuth2)
 
-Voorwaarde: een Twinfield user met Webservices-rol op de Sirrapa offices (zie [`../connectors/twinfield_xero_api_setup.md`](../connectors/twinfield_xero_api_setup.md)).
+Twinfield heeft de oude SOAP-logon (user + Webservice key) uitgezet — die geeft
+nu `OAuth2AuthenticationRequired`. Toegang loopt via OpenID Connect. Voorwaarde:
+een bij Twinfield geregistreerde OAuth-app (`client_id` + `client_secret`). Zie
+[`../connectors/twinfield_oauth2_migration.md`](../connectors/twinfield_oauth2_migration.md) voor de aanvraag.
 
 ```bash
 # in .env:
-TWINFIELD_ORGANISATION=KUBUSALKMAAR
-TWINFIELD_USER=APARRIS
-TWINFIELD_PASSWORD=...           # Webservice key, NIET je SSO-wachtwoord
+TWINFIELD_CLIENT_ID=...
+TWINFIELD_CLIENT_SECRET=...
+TWINFIELD_REDIRECT_URI=http://localhost:8080/callback
 TWINFIELD_OFFICE_VASTGOED=21007
 TWINFIELD_OFFICE_ICT=21005
 TWINFIELD_OFFICE_HOLDING=21006
 
-# Stap 1: verifieer de credentials (Logon + listOffices, geen LLM-credit)
+# Stap 1: eenmalige autorisatie (opent browser, login als APARRIS, consent)
+npm run twinfield:auth        # slaat refresh_token op in .twinfield-tokens.json
+
+# Stap 2: verifieer de koppeling (refresh → cluster → offices, geen LLM-credit)
 npm run twinfield:test
 
-# Stap 2: eerste live digest
+# Stap 3: eerste live digest
 npm run flash
 ```
 
-`TWINFIELD_PASSWORD` is de **Webservice key**, in te stellen via Twinfield →
-Toegangsinstellingen → Gebruikersinstellingen → "Webservice key wijzigen". Met
-je gewone SSO-wachtwoord faalt de SOAP Logon met `InvalidCredentials`.
+`twinfield:auth` doet de authorization-code grant eenmalig; daarna refresht de
+daily flash zelf het access_token (headless). Her-autoriseren is alleen nodig als
+het refresh_token verloopt of wordt ingetrokken.
 
-`twinfield:test` is je vangnet: het zegt expliciet of de Logon werkt, welke
-cluster Twinfield toewijst, welke offices zichtbaar zijn voor deze user, en
-welke nog missen. Pas als die groen is, heeft `npm run flash` zin.
+`twinfield:test` is je vangnet: het zegt expliciet of de token-refresh werkt,
+welke cluster Twinfield toewijst, welke offices zichtbaar zijn, en welke nog
+missen. Pas als die groen is, heeft `npm run flash` zin.
 
 Cron `0 8 * * 1-5 cd /path/to/quorima-mvp && npm run flash` levert je elke
 werkdag om 08:00 een digest in `./output/`.
@@ -95,7 +101,7 @@ werkdag om 08:00 een digest in `./output/`.
 │   ↓ orchestreert alles, parst CLI flags                     │
 ├─────────────────────────────────────────────────────────────┤
 │ src/adapters/                                               │
-│   twinfield/  ← SOAP client + Browse XML mapper             │
+│   twinfield/  ← OAuth2 SOAP client + Browse XML mapper      │
 │   mock/       ← fixture-driven, voor offline dev            │
 │   beide implementeren AccountingPort                        │
 ├─────────────────────────────────────────────────────────────┤
@@ -109,7 +115,7 @@ werkdag om 08:00 een digest in `./output/`.
 │   pure functies, zero side effects, makkelijk te testen     │
 ├─────────────────────────────────────────────────────────────┤
 │ src/agents/cfo.ts                                           │
-│   Claude Opus 4.6 wrapper. Krijgt grounded data,            │
+│   Claude Opus 4.8 wrapper. Krijgt grounded data,            │
 │   schrijft de briefing. Prime directive: never invent.      │
 ├─────────────────────────────────────────────────────────────┤
 │ src/digest/render.ts                                        │
@@ -133,7 +139,8 @@ Deze structuur is bewust dezelfde architectuur die straks de andere agents
 | `npm run flash` | productie: real Twinfield + Claude Opus |
 | `npm run flash:mock` | mock data + Claude Opus |
 | `npm run flash:dry-run` | mock data + no LLM (gratis, geen API call) |
-| `npm run twinfield:test` | alleen Logon + listOffices, voor credential-debug |
+| `npm run twinfield:auth` | eenmalige OAuth2-autorisatie (browser-consent → refresh_token) |
+| `npm run twinfield:test` | token-refresh + cluster + offices, voor koppeling-debug |
 | `npm run test:smoke` | dry-run quiet, voor CI |
 
 ## Exit codes

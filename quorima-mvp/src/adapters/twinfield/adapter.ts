@@ -1,16 +1,15 @@
 // Twinfield AccountingPort — production adapter.
 //
-// Twinfield biedt twee API's: SOAP (sessie-based, oudere stijl) en REST
-// (OAuth2). Voor Sprint 1 gebruiken we SOAP omdat de SOAP-route geen
-// OAuth-app-registratie bij Wolters Kluwer vereist — we gebruiken een
-// service-account dat de klant zelf aanmaakt in Twinfield admin met
-// "Webservices"-rol.
+// We gebruiken de SOAP processxml-service met OAuth2-authenticatie. De oude
+// Session.Logon (user + Webservice key) is door Twinfield uitgezet en geeft
+// `OAuth2AuthenticationRequired`; zie connectors/twinfield_oauth2_migration.md.
 //
 // Architectuur:
-//   1. Sessie login → Session.Logon (Twinfield)
-//   2. Cluster discovery → Sessie geeft cluster URL terug
-//   3. Process XML → POST /webservices/processxml.asmx?wsdl
-//      met BrowseXML / ColumnsXML voor grootboek-queries
+//   1. OAuth2 → access_token (refresh headless, zie oauth.ts)
+//   2. Cluster discovery → accesstokenvalidation geeft twf.clusterUrl
+//   3. Process XML → POST <cluster>/webservices/processxml.asmx?wsdl met
+//      AccessToken + CompanyCode (office) in de SOAP-header, BrowseXML /
+//      ColumnsXML voor grootboek-queries
 //
 // Voor de eerste iteratie van de MVP focussen we op de minimale set
 // queries die de drie KPIs voeden: P&L, transactions per account-prefix,
@@ -29,59 +28,52 @@ import type {
   Transaction,
 } from "../../types.js";
 import type { AccountingPort, TxFilter } from "../../ports/accounting.js";
+import { getValidAccessContext, type OAuthClientConfig } from "./oauth.js";
 
-const LOGON_WSDL = "https://login.twinfield.com/webservices/session.asmx?wsdl";
-
-export interface TwinfieldConfig {
-  organisation: string;
-  user: string;
-  password: string;
-}
-
-interface Session {
-  cluster: string;
-  sessionId: string;
+export interface TwinfieldConfig extends OAuthClientConfig {
+  /** pad naar de lokale token-store met het refresh_token (gitignored) */
+  tokenStorePath: string;
 }
 
 export class TwinfieldAccountingPort implements AccountingPort {
-  private session: Session | null = null;
   private processXmlClient: soap.Client | null = null;
+  private clientClusterUrl: string | null = null;
 
   constructor(private config: TwinfieldConfig) {}
 
-  // ─── Connection lifecycle ───────────────────────────────────────────
+  // ─── Connection lifecycle (OAuth2 / OpenID Connect) ─────────────────
+  //
+  // Twinfield's oude Session.Logon (user + Webservice key) is uitgezet en
+  // geeft `OAuth2AuthenticationRequired`. We halen per call een geldig
+  // access_token + clusterUrl op (refresh headless via oauth.ts) en zetten
+  // AccessToken + CompanyCode in de SOAP-header. CompanyCode = de office,
+  // dus die varieert per entiteit en wordt per call ververst.
 
-  private async ensureSession(): Promise<Session> {
-    if (this.session) return this.session;
-
-    const client = await soap.createClientAsync(LOGON_WSDL);
-    const [result] = await client.LogonAsync({
-      user: this.config.user,
-      password: this.config.password,
-      organisation: this.config.organisation,
-    });
-
-    if (result.LogonResult !== "Ok") {
-      throw new Error(`Twinfield logon failed: ${result.LogonResult}`);
+  private async ensureProcessClient(clusterUrl: string): Promise<soap.Client> {
+    if (this.processXmlClient && this.clientClusterUrl === clusterUrl) {
+      return this.processXmlClient;
     }
-
-    const cluster = result.cluster as string;
-    const headers = (client.lastResponseHeaders ?? "") as string;
-    const sessionMatch = /SessionID=([^;]+)/.exec(headers);
-    if (!sessionMatch) throw new Error("Twinfield: no SessionID returned");
-
-    this.session = { cluster, sessionId: sessionMatch[1]! };
-    return this.session;
+    const wsdl = `${clusterUrl}/webservices/processxml.asmx?wsdl`;
+    this.processXmlClient = await soap.createClientAsync(wsdl);
+    this.clientClusterUrl = clusterUrl;
+    return this.processXmlClient;
   }
 
-  private async ensureProcessClient(): Promise<soap.Client> {
-    if (this.processXmlClient) return this.processXmlClient;
-    const sess = await this.ensureSession();
-    const wsdl = `${sess.cluster}/webservices/processxml.asmx?wsdl`;
-    const client = await soap.createClientAsync(wsdl);
-    client.addSoapHeader({ Header: { SessionID: sess.sessionId } }, "", "tw", "http://www.twinfield.com/");
-    this.processXmlClient = client;
-    return client;
+  private async callProcessXml(office: string, xmlRequest: string): Promise<string> {
+    const { accessToken, clusterUrl } = await getValidAccessContext(
+      this.config,
+      this.config.tokenStorePath,
+    );
+    const client = await this.ensureProcessClient(clusterUrl);
+    client.clearSoapHeaders();
+    client.addSoapHeader(
+      { Header: { AccessToken: accessToken, CompanyCode: office } },
+      "",
+      "tw",
+      "http://www.twinfield.com/",
+    );
+    const [result] = await client.ProcessXmlStringAsync({ xmlRequest });
+    return result.ProcessXmlStringResult as string;
   }
 
   // ─── Public AccountingPort interface ────────────────────────────────
@@ -118,7 +110,6 @@ export class TwinfieldAccountingPort implements AccountingPort {
 
   async getPnL(entityId: EntityId, period: Period): Promise<PnLReport> {
     const office = officeFromEntityId(entityId);
-    const client = await this.ensureProcessClient();
 
     // Browse XML voor een rolling 12m P&L: vraag alle entries op
     // grootboekrekeningen met type "income" of "expense".
@@ -135,13 +126,12 @@ export class TwinfieldAccountingPort implements AccountingPort {
   <column id="6"><field>fin.trs.head.code</field><visible>false</visible></column>
 </columns>`;
 
-    const [result] = await client.ProcessXmlStringAsync({ xmlRequest: browse });
-    return parsePnLFromBrowseXml(result.ProcessXmlStringResult, entityId, period);
+    const xml = await this.callProcessXml(office, browse);
+    return parsePnLFromBrowseXml(xml, entityId, period);
   }
 
   async getBalanceSheet(entityId: EntityId, asOf: string): Promise<BalanceSheet> {
-    const _office = officeFromEntityId(entityId); // reserved for future use
-    const client = await this.ensureProcessClient();
+    const office = officeFromEntityId(entityId);
     const ym = formatYearMonth(new Date(asOf));
 
     const browse = `<?xml version="1.0"?>
@@ -152,21 +142,19 @@ export class TwinfieldAccountingPort implements AccountingPort {
   <column id="4"><field>fin.trs.head.yearperiod</field><to>${ym}</to></column>
 </columns>`;
 
-    const [result] = await client.ProcessXmlStringAsync({ xmlRequest: browse });
-    return parseBalanceSheetFromBrowseXml(result.ProcessXmlStringResult, entityId, asOf);
+    const xml = await this.callProcessXml(office, browse);
+    return parseBalanceSheetFromBrowseXml(xml, entityId, asOf);
   }
 
   async listAccounts(entityId: EntityId): Promise<Account[]> {
     const office = officeFromEntityId(entityId);
-    const client = await this.ensureProcessClient();
-    const xml = `<list><type>dimensions</type><office>${office}</office><dimtype>BAS</dimtype></list>`;
-    const [result] = await client.ProcessXmlStringAsync({ xmlRequest: xml });
-    return parseAccountsList(result.ProcessXmlStringResult);
+    const listXml = `<list><type>dimensions</type><office>${office}</office><dimtype>BAS</dimtype></list>`;
+    const xml = await this.callProcessXml(office, listXml);
+    return parseAccountsList(xml);
   }
 
   async listTransactions(entityId: EntityId, filter: TxFilter): Promise<Transaction[]> {
-    const _office = officeFromEntityId(entityId);
-    const client = await this.ensureProcessClient();
+    const office = officeFromEntityId(entityId);
     const fromYM = filter.from ? formatYearMonth(new Date(filter.from)) : "2026/01";
     const toYM = filter.to ? formatYearMonth(new Date(filter.to)) : formatYearMonth(new Date());
 
@@ -182,8 +170,8 @@ export class TwinfieldAccountingPort implements AccountingPort {
   <column id="8"><field>fin.trs.head.yearperiod</field><from>${fromYM}</from><to>${toYM}</to></column>
   ${filter.accountCodePrefix ? `<column id="9"><field>fin.trs.line.dim1</field><from>${filter.accountCodePrefix}0</from><to>${filter.accountCodePrefix}9</to></column>` : ""}
 </columns>`;
-    const [result] = await client.ProcessXmlStringAsync({ xmlRequest: browse });
-    return parseTransactionsBrowseXml(result.ProcessXmlStringResult, entityId);
+    const xml = await this.callProcessXml(office, browse);
+    return parseTransactionsBrowseXml(xml, entityId);
   }
 
   async deriveLoanRegister(entityId: EntityId): Promise<Loan[]> {

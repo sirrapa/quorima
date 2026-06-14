@@ -9,6 +9,7 @@
     "flash": "tsx src/cli/daily-flash.ts",
     "flash:mock": "tsx src/cli/daily-flash.ts --mock",
     "flash:dry-run": "tsx src/cli/daily-flash.ts --mock --no-llm",
+    "twinfield:auth": "tsx src/cli/twinfield-auth.ts",
     "twinfield:test": "tsx src/cli/twinfield-test.ts",
     "test:smoke": "tsx src/cli/daily-flash.ts --mock --no-llm --quiet"
   },

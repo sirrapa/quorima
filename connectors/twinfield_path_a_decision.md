@@ -1,5 +1,7 @@
 # Twinfield connector — Path A gekozen
 
+> ⚠️ **ACHTERHAALD per 14 juni 2026.** Twinfield heeft de SOAP `Session.Logon` (user + Webservice key) uitgezet; een logon geeft nu `OAuth2AuthenticationRequired`. Path A werkt niet meer. De actieve aanpak staat in **`twinfield_oauth2_migration.md`** (OAuth2 / OpenID Connect). Dit document blijft als historische context.
+
 **Datum:** 27 april 2026
 **Beslissing:** Sirrapa Group gebruikt de **APARRIS user** met Webservice key voor Quorima — geen aparte service-account.
 

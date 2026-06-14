@@ -40,7 +40,7 @@ export class CFOAgent {
 
   constructor(opts: CFOAgentOptions) {
     this.client = new Anthropic({ apiKey: opts.apiKey });
-    this.model = opts.model ?? "claude-opus-4-6";
+    this.model = opts.model ?? "claude-opus-4-8";
     this.maxTokens = opts.maxTokens ?? 1500;
   }
 

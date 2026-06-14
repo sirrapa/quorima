@@ -1,16 +1,17 @@
 #!/usr/bin/env node
-// Quorima — Twinfield credentials test
+// Quorima — Twinfield OAuth2 connectie-test.
 //
-// Doet *alleen* SOAP Logon + cluster discovery + listOffices.
-// Geen ProcessXmlString, geen LLM call. Resultaat: heel snelle ja/nee
-// of de service-account credentials werken, en zo niet: precies waarom.
+// Verifieert de hele keten read-only: refresh_token → access_token →
+// cluster discovery → processxml offices-lijst. Geen LLM, geen schrijfacties.
+//
+// Vereist dat `npm run twinfield:auth` ooit een refresh_token heeft opgeslagen.
 //
 // Usage:  npm run twinfield:test
 
 import "dotenv/config";
+import { resolve } from "node:path";
 import * as soap from "soap";
-
-const LOGON_WSDL = "https://login.twinfield.com/webservices/session.asmx?wsdl";
+import { getValidAccessContext, type OAuthClientConfig } from "../adapters/twinfield/oauth.js";
 
 const COLOR = {
   reset: "\x1b[0m",
@@ -20,209 +21,103 @@ const COLOR = {
   dim: "\x1b[2m",
   bold: "\x1b[1m",
 };
-
-const ok = (msg: string): void => console.log(`${COLOR.ok}✓${COLOR.reset} ${msg}`);
-const fail = (msg: string): void => console.log(`${COLOR.fail}✗${COLOR.reset} ${msg}`);
-const info = (msg: string): void => console.log(`  ${COLOR.dim}${msg}${COLOR.reset}`);
-const warn = (msg: string): void => console.log(`${COLOR.warn}!${COLOR.reset} ${msg}`);
+const ok = (m: string): void => console.log(`${COLOR.ok}✓${COLOR.reset} ${m}`);
+const fail = (m: string): void => console.log(`${COLOR.fail}✗${COLOR.reset} ${m}`);
+const info = (m: string): void => console.log(`  ${COLOR.dim}${m}${COLOR.reset}`);
+const warn = (m: string): void => console.log(`${COLOR.warn}!${COLOR.reset} ${m}`);
 
 interface OfficeRecord {
   code: string;
   name: string;
-  shortName?: string;
 }
 
 async function main(): Promise<void> {
-  console.log(`${COLOR.bold}Quorima — Twinfield credentials test${COLOR.reset}\n`);
+  console.log(`${COLOR.bold}Quorima — Twinfield OAuth2 connectie-test${COLOR.reset}\n`);
 
-  // 1. Check env vars
-  const org = process.env.TWINFIELD_ORGANISATION;
-  const user = process.env.TWINFIELD_USER;
-  const password = process.env.TWINFIELD_PASSWORD;
-
-  if (!org || !user || !password) {
-    fail("Missing required environment variables");
-    if (!org) info("  TWINFIELD_ORGANISATION is empty (expected: KUBUSALKMAAR)");
-    if (!user) info("  TWINFIELD_USER is empty (expected: quorima-svc or your service-account login)");
-    if (!password) info("  TWINFIELD_PASSWORD is empty");
+  // 1. Client-config uit env
+  const clientId = process.env.TWINFIELD_CLIENT_ID;
+  const clientSecret = process.env.TWINFIELD_CLIENT_SECRET;
+  const redirectUri = process.env.TWINFIELD_REDIRECT_URI;
+  if (!clientId || !clientSecret || !redirectUri) {
+    fail("Ontbrekende OAuth-config in .env");
+    if (!clientId) info("TWINFIELD_CLIENT_ID is leeg");
+    if (!clientSecret) info("TWINFIELD_CLIENT_SECRET is leeg");
+    if (!redirectUri) info("TWINFIELD_REDIRECT_URI is leeg");
     info("");
-    info("Fix: copy .env.example to .env and fill in the credentials.");
+    info("Registreer een OAuth-app bij Twinfield, vul .env, draai dan: npm run twinfield:auth");
     process.exit(1);
   }
+  const cfg: OAuthClientConfig = { clientId, clientSecret, redirectUri };
+  const storePath = process.env.TWINFIELD_TOKEN_STORE ?? resolve(".twinfield-tokens.json");
+  ok(`OAuth-config geladen — client_id=${clientId.slice(0, 6)}… redirect=${redirectUri}`);
 
-  ok(`env loaded — organisation=${org} user=${user} password=***`);
+  // 2. Token refresh + cluster discovery
+  let accessToken: string;
+  let clusterUrl: string;
+  try {
+    const ctx = await getValidAccessContext(cfg, storePath);
+    accessToken = ctx.accessToken;
+    clusterUrl = ctx.clusterUrl;
+  } catch (e) {
+    fail(`Kon geen geldig access_token verkrijgen: ${(e as Error).message}`);
+    info("→ Heb je de eenmalige autorisatie al gedaan? Draai: npm run twinfield:auth");
+    process.exit(1);
+  }
+  ok("Access token verkregen (refresh werkt)");
+  ok(`Cluster: ${clusterUrl}`);
 
-  // 2. Try the SOAP Logon
+  // 3. Offices ophalen via processxml
   let client: soap.Client;
   try {
-    client = await soap.createClientAsync(LOGON_WSDL);
-    ok(`SOAP client created (login.twinfield.com reachable)`);
+    client = await soap.createClientAsync(`${clusterUrl}/webservices/processxml.asmx?wsdl`);
+    client.addSoapHeader({ Header: { AccessToken: accessToken } }, "", "tw", "http://www.twinfield.com/");
   } catch (e) {
-    fail(`Cannot reach Twinfield Logon WSDL`);
-    info(`  ${(e as Error).message}`);
-    info(`  → check internet connectivity / firewall rules. login.twinfield.com:443 must be open.`);
-    process.exit(1);
-  }
-
-  let logonResult: { LogonResult: string; cluster?: string };
-  try {
-    const [result] = await client.LogonAsync({ user, password, organisation: org });
-    logonResult = result;
-  } catch (e) {
-    fail(`Logon SOAP call failed: ${(e as Error).message}`);
-    process.exit(1);
-  }
-
-  if (logonResult.LogonResult !== "Ok") {
-    fail(`Logon rejected: ${logonResult.LogonResult}`);
-    explainLogonError(logonResult.LogonResult);
-    process.exit(1);
-  }
-
-  ok(`Logon successful`);
-  const cluster = logonResult.cluster;
-  if (!cluster) {
-    fail(`No cluster returned`);
-    info(`  → user heeft geen office-toewijzing. Zie service-account guide stap 5.`);
-    process.exit(1);
-  }
-  ok(`Cluster: ${cluster}`);
-
-  // 3. Get session id from response headers
-  const headers = (client.lastResponseHeaders ?? "") as string;
-  const sessionMatch = /SessionID=([^;]+)/.exec(headers);
-  if (!sessionMatch) {
-    fail(`Logon ok but no SessionID returned in cookie — unexpected`);
-    process.exit(1);
-  }
-  const sessionId = sessionMatch[1]!;
-  ok(`Session ID captured`);
-
-  // 4. List offices via cluster's session.asmx
-  const sessionWsdl = `${cluster}/webservices/session.asmx?wsdl`;
-  let sessionClient: soap.Client;
-  try {
-    sessionClient = await soap.createClientAsync(sessionWsdl);
-    sessionClient.addSoapHeader(
-      { Header: { SessionID: sessionId } },
-      "",
-      "tw",
-      "http://www.twinfield.com/",
-    );
-  } catch (e) {
-    fail(`Cannot reach cluster session WSDL: ${(e as Error).message}`);
+    fail(`Kan processxml-WSDL niet laden: ${(e as Error).message}`);
     process.exit(1);
   }
 
   let offices: OfficeRecord[] = [];
   try {
-    // SelectCompany list — varies between Twinfield SOAP versions; try the most common
-    const [response] = await sessionClient.GetCompaniesAsync({});
-    offices = parseOffices(response);
+    const [resp] = await client.ProcessXmlStringAsync({
+      xmlRequest: "<list><type>offices</type></list>",
+    });
+    offices = parseOfficesFromXml(resp.ProcessXmlStringResult ?? "");
   } catch (e) {
-    // Fallback: try ListOffices via processxml
-    try {
-      const procClient = await soap.createClientAsync(`${cluster}/webservices/processxml.asmx?wsdl`);
-      procClient.addSoapHeader(
-        { Header: { SessionID: sessionId } },
-        "",
-        "tw",
-        "http://www.twinfield.com/",
-      );
-      const [resp] = await procClient.ProcessXmlStringAsync({
-        xmlRequest: "<list><type>offices</type></list>",
-      });
-      offices = parseOfficesFromXml(resp.ProcessXmlStringResult ?? "");
-    } catch (e2) {
-      fail(`Cannot list offices: ${(e2 as Error).message}`);
-      info(`  Logon werkte maar offices ophalen niet — meestal:`);
-      info(`  → Webservices-rol mist op de offices (zie guide stap 4-5)`);
-      info(`  → of het API-pakket is niet geactiveerd op de organisatie (mail support@twinfield.com)`);
-      process.exit(1);
-    }
-  }
-
-  if (offices.length === 0) {
-    fail(`Logon ok maar 0 offices zichtbaar`);
-    info(`  → user heeft Webservices-rol op geen enkele administratie`);
-    info(`  → fix: Twinfield Beheer → Gebruikers → ${user} → Offices tab → voeg 21005/21006/21007 toe`);
+    fail(`Offices ophalen mislukt: ${(e as Error).message}`);
+    info("→ access_token werkt maar de scope/rechten dekken processxml niet.");
+    info("  Controleer scopes (twf.organisationUser) en dat de user toegang heeft tot de admins.");
     process.exit(1);
   }
 
-  ok(`Offices found: ${offices.length}`);
-  for (const o of offices) {
-    info(`    ${o.code.padEnd(8)}${o.name}`);
+  if (offices.length === 0) {
+    fail("0 offices zichtbaar voor deze user");
+    process.exit(1);
   }
+  ok(`Offices gevonden: ${offices.length}`);
+  for (const o of offices) info(`  ${o.code.padEnd(8)}${o.name}`);
 
-  // 5. Verify expected offices for Sirrapa
+  // 4. Verwachte Sirrapa-offices
   const expected: Record<string, string> = {
     [process.env.TWINFIELD_OFFICE_VASTGOED ?? "21007"]: "Sirrapa Vastgoed B.V.",
     [process.env.TWINFIELD_OFFICE_ICT ?? "21005"]: "Sirrapa (ICT) B.V.",
     [process.env.TWINFIELD_OFFICE_HOLDING ?? "21006"]: "Sirrapa Group Holding B.V.",
   };
   const found = new Set(offices.map((o) => o.code));
-  const missing: string[] = [];
-  for (const code of Object.keys(expected)) {
-    if (!found.has(code)) missing.push(`${code} (${expected[code]})`);
-  }
-
+  const missing = Object.keys(expected).filter((c) => !found.has(c));
   if (missing.length > 0) {
-    warn(`Some expected offices are not visible to this user:`);
-    for (const m of missing) info(`    ${m}`);
-    info(`  → fix: voeg deze offices toe aan ${user} in Twinfield Beheer (zie guide stap 5)`);
-    info(`  → de daily flash kan dan deze entiteiten niet rapporteren`);
+    warn("Niet alle verwachte offices zichtbaar:");
+    for (const m of missing) info(`  ${m} (${expected[m]})`);
   } else {
-    ok(`All three Sirrapa offices visible — Quorima is fully unblocked`);
+    ok("Alle drie Sirrapa-offices zichtbaar — Quorima is volledig gekoppeld");
   }
 
-  // 6. Final
   console.log("");
-  console.log(`${COLOR.bold}Result:${COLOR.reset} ${COLOR.ok}credentials werkend${COLOR.reset}`);
-  console.log("");
-  console.log(`Volgende stap: ${COLOR.bold}npm run flash${COLOR.reset} voor de eerste live daily flash digest.`);
-  console.log(`(of ${COLOR.bold}npm run flash:dry-run${COLOR.reset} om de logica te testen zonder LLM-credit te gebruiken.)`);
-}
-
-function explainLogonError(code: string): void {
-  const explanations: Record<string, string> = {
-    InvalidCredentials:
-      "  → user/password combinatie klopt niet. Check exact wachtwoord (special characters!) in 1Password.",
-    NotAuthorised:
-      "  → user heeft geen Webservices-rol op de organisatie. Zie guide stap 4.",
-    OrganisationNotFound:
-      "  → TWINFIELD_ORGANISATION code klopt niet — moet exact KUBUSALKMAAR zijn (case-sensitive?).",
-    OrganisationExpired:
-      "  → het Twinfield-pakket op deze organisatie is verlopen. Bel Twinfield support.",
-  };
-  const explanation = explanations[code];
-  if (explanation) {
-    info(explanation);
-  } else {
-    info(`  → onbekende code "${code}". Mail Twinfield support op support@twinfield.com.`);
-  }
-}
-
-function parseOffices(response: unknown): OfficeRecord[] {
-  // Twinfield SOAP response is loosely typed; pluck out company/office records
-  const out: OfficeRecord[] = [];
-  const obj = response as Record<string, unknown>;
-  const result = obj.GetCompaniesResult as unknown;
-  if (typeof result === "string") {
-    return parseOfficesFromXml(result);
-  }
-  if (result && typeof result === "object") {
-    const list = (result as { Company?: Array<{ Code: string; Name: string }> }).Company ?? [];
-    for (const c of list) {
-      out.push({ code: c.Code, name: c.Name });
-    }
-  }
-  return out;
+  console.log(`${COLOR.bold}Resultaat:${COLOR.reset} ${COLOR.ok}OAuth2-koppeling werkend${COLOR.reset}`);
+  console.log(`\nVolgende stap: ${COLOR.bold}npm run flash${COLOR.reset} voor de eerste live daily flash.`);
 }
 
 function parseOfficesFromXml(xml: string): OfficeRecord[] {
   const out: OfficeRecord[] = [];
-  // Twinfield response: <office shortname="..." name="..." code="...">...</office>
-  // also sometimes: <office><code>...</code><name>...</name></office>
   const officeRe = /<office[^>]*?(?:code="([^"]+)")?[^>]*>([\s\S]*?)<\/office>/g;
   let match: RegExpExecArray | null;
   while ((match = officeRe.exec(xml)) !== null) {
@@ -239,9 +134,6 @@ function parseOfficesFromXml(xml: string): OfficeRecord[] {
 }
 
 main().catch((err) => {
-  fail(`Unexpected error: ${(err as Error).message}`);
-  if ((err as Error).stack) {
-    info((err as Error).stack as string);
-  }
+  fail(`Onverwachte fout: ${(err as Error).message}`);
   process.exit(1);
 });

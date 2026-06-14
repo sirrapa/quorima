@@ -41,9 +41,10 @@ async function getAdapter(args: CLIArgs): Promise<AccountingPort> {
   // don't pull in the SOAP dependency.
   const { TwinfieldAccountingPort } = await import("../adapters/twinfield/adapter.js");
   return new TwinfieldAccountingPort({
-    organisation: requireEnv("TWINFIELD_ORGANISATION"),
-    user: requireEnv("TWINFIELD_USER"),
-    password: requireEnv("TWINFIELD_PASSWORD"),
+    clientId: requireEnv("TWINFIELD_CLIENT_ID"),
+    clientSecret: requireEnv("TWINFIELD_CLIENT_SECRET"),
+    redirectUri: requireEnv("TWINFIELD_REDIRECT_URI"),
+    tokenStorePath: process.env.TWINFIELD_TOKEN_STORE ?? resolve(".twinfield-tokens.json"),
   });
 }
 
