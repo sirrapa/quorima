@@ -1,0 +1,30 @@
+{
+  "schema": "quorima.invoice-overview.v1",
+  "generated_at": "2026-01-01T08:00:00+01:00",
+  "source": "voorbeeld / sample (geen echte data)",
+  "account": "voorbeeld@example.com",
+  "invoices": [
+    {
+      "entity": "SVG",
+      "office": "21007",
+      "supplier": "Voorbeeld Leverancier A",
+      "reference": "INV-0001",
+      "amount_eur": 1234.56,
+      "due_date": "2026-01-15",
+      "status": "monitor",
+      "link": null,
+      "note": "placeholder — vervangen door de live Hermes-feed"
+    },
+    {
+      "entity": "SGH",
+      "office": "21006",
+      "supplier": "Voorbeeld Leverancier B",
+      "reference": "draft-0000",
+      "amount_eur": null,
+      "due_date": null,
+      "status": "basecone-draft",
+      "link": null,
+      "note": "placeholder"
+    }
+  ]
+}

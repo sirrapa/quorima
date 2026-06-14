@@ -5,7 +5,8 @@ Statische momentopname die als cockpit dient over de agentic C-suite van de hold
 ## Bestanden
 
 - `index.html` - het dashboard. Open via de Launch preview of een webserver (de factuur-feed laadt niet via `file://` wegens CORS).
-- `data/invoice-overview.json` - de live factuur-feed (CFO-admin). Zie "Factuur-feed (Hermes)".
+- `data/invoice-overview.json` - de **live** factuur-feed (echte bedragen/ID's). **Gitignored** — Hermes schrijft dit lokaal, het wordt niet gecommit. Zie "Factuur-feed (Hermes)".
+- `data/invoice-overview.example.json` - placeholder-versie (wel gecommit), als fallback en schema-voorbeeld.
 
 ## Factuur-feed (Hermes)
 
@@ -35,7 +36,9 @@ Contract `quorima.invoice-overview.v1`:
 }
 ```
 
-`status` mapt op de drie routeringsklassen uit de unified spec (incasso/monitor/still-to-pay) plus `basecone-draft` (wacht op approval) en `review`. `office` is de Twinfield office-code = dezelfde codes als in de tenant-config en de Basecone-routing. De huidige `data/invoice-overview.json` is geseed met de echte items uit de Hermes-handoff van 13 juni; laat Hermes hem voortaan overschrijven.
+`status` mapt op de drie routeringsklassen uit de unified spec (incasso/monitor/still-to-pay) plus `basecone-draft` (wacht op approval) en `review`. `office` is de Twinfield office-code = dezelfde codes als in de tenant-config en de Basecone-routing.
+
+**Privacy:** de live `data/invoice-overview.json` bevat echte bedragen en Basecone-ID's en is daarom **gitignored** (de repo is publiek). Hermes schrijft/synct dit bestand lokaal; het dashboard fetcht het en valt terug op `invoice-overview.example.json` (placeholder) als het ontbreekt. Alleen de `.example` wordt gecommit.
 
 ## Datastatus (belangrijk)
 

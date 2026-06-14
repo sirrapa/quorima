@@ -17,6 +17,10 @@ quorima-mvp/output/
 .twinfield-tokens.json
 *.twinfield-tokens.json
 
+# Live factuur-feed (echte bedragen/ID's) — Hermes schrijft dit lokaal.
+# Alleen de .example-versie wordt gecommit.
+dashboard/data/invoice-overview.json
+
 # Editor / OS
 .DS_Store
 .vscode/
