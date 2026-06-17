@@ -31,6 +31,7 @@ import type { AccountingPort, TxFilter } from "../../ports/accounting.js";
 import { getValidAccessContext, type OAuthClientConfig } from "./oauth.js";
 import {
   classifyPnl,
+  isCumulativeRepaymentAccount,
   isCurrentPrincipalAccount,
   isLoanPrincipalAccount,
 } from "./account-classify.js";
@@ -227,18 +228,24 @@ export class TwinfieldAccountingPort implements AccountingPort {
       this.ensureNames(office),
     ]);
 
-    let totalBalance = 0;
+    // Netto openstaande schuld = hoofdsom (credit, negatief) + reeds gedane
+    // cumulatieve aflossing (debet, positief).
+    let principalSigned = 0;
+    let repaidSigned = 0;
     let annualPrincipal = 0;
     let loanAccounts = 0;
     for (const [account, amount] of aggregateByAccount(xml)) {
       const name = names.get(account) ?? account;
       if (isLoanPrincipalAccount(name) && Math.abs(amount) > 0) {
-        totalBalance += Math.abs(amount);
+        principalSigned += amount;
         loanAccounts += 1;
+      } else if (isCumulativeRepaymentAccount(name)) {
+        repaidSigned += amount;
       } else if (isCurrentPrincipalAccount(name)) {
         annualPrincipal += Math.abs(amount);
       }
     }
+    const totalBalance = Math.abs(principalSigned + repaidSigned);
     if (totalBalance === 0) return [];
 
     // Gewogen rente uit de rentelasten in de P&L (rolling 12m).

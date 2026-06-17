@@ -41,3 +41,12 @@ export function isLoanPrincipalAccount(name = ""): boolean {
 export function isCurrentPrincipalAccount(name = ""): boolean {
   return name.toLowerCase().trim().startsWith("afl. lopend jr");
 }
+
+/**
+ * Contra-rekening met de tot nu toe gedane aflossing ("Cumulatieve aflossing
+ * ..."). Wordt afgetrokken van de hoofdsom om de netto openstaande schuld te
+ * bepalen.
+ */
+export function isCumulativeRepaymentAccount(name = ""): boolean {
+  return name.toLowerCase().trim().startsWith("cumulatieve aflossing");
+}
