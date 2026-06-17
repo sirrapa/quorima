@@ -116,14 +116,13 @@ export class TwinfieldAccountingPort implements AccountingPort {
     const fromYM = formatYearMonth(rolling12mStart(period));
     const toYM = formatYearMonth(periodEndDate(period));
 
-    const browse = `<?xml version="1.0"?>
-<columns code="000" cluster="financial" xmlns="" >
-  <column id="1"><field>fin.trs.line.dim1</field><label>account</label><visible>true</visible></column>
-  <column id="2"><field>fin.trs.line.dim1.name</field><label>name</label><visible>true</visible></column>
-  <column id="3"><field>fin.trs.line.valuesigned</field><label>amount</label><visible>true</visible><operator>sum</operator></column>
-  <column id="4"><field>fin.trs.head.yearperiod</field><from>${fromYM}</from><to>${toYM}</to></column>
-  <column id="5"><field>fin.trs.line.matchstatus</field><visible>false</visible></column>
-  <column id="6"><field>fin.trs.head.code</field><visible>false</visible></column>
+    // Twinfield browse code 000 = grootboektransacties. Eén regel per
+    // transactieregel; we aggregeren client-side per rekening (dim1).
+    // Kolommen moeten <visible>true</visible> zijn om als <td> terug te komen.
+    const browse = `<columns code="000">
+  <column><field>fin.trs.line.dim1</field><visible>true</visible></column>
+  <column><field>fin.trs.line.valuesigned</field><visible>true</visible></column>
+  <column><field>fin.trs.head.yearperiod</field><operator>between</operator><from>${fromYM}</from><to>${toYM}</to><visible>false</visible></column>
 </columns>`;
 
     const xml = await this.callProcessXml(office, browse);
@@ -134,12 +133,12 @@ export class TwinfieldAccountingPort implements AccountingPort {
     const office = officeFromEntityId(entityId);
     const ym = formatYearMonth(new Date(asOf));
 
-    const browse = `<?xml version="1.0"?>
-<columns code="030" cluster="financial" xmlns="">
-  <column id="1"><field>fin.trs.line.dim1</field><label>account</label><visible>true</visible></column>
-  <column id="2"><field>fin.trs.line.dim1.name</field><label>name</label><visible>true</visible></column>
-  <column id="3"><field>fin.trs.line.valuesigned</field><label>amount</label><operator>sum</operator></column>
-  <column id="4"><field>fin.trs.head.yearperiod</field><to>${ym}</to></column>
+    // Balans = cumulatief saldo per rekening t/m de periode. We lezen alle
+    // transactieregels t/m ${ym} (code 000) en sommeren client-side per dim1.
+    const browse = `<columns code="000">
+  <column><field>fin.trs.line.dim1</field><visible>true</visible></column>
+  <column><field>fin.trs.line.valuesigned</field><visible>true</visible></column>
+  <column><field>fin.trs.head.yearperiod</field><operator>between</operator><from>2000/00</from><to>${ym}</to><visible>false</visible></column>
 </columns>`;
 
     const xml = await this.callProcessXml(office, browse);
@@ -158,17 +157,16 @@ export class TwinfieldAccountingPort implements AccountingPort {
     const fromYM = filter.from ? formatYearMonth(new Date(filter.from)) : "2026/01";
     const toYM = filter.to ? formatYearMonth(new Date(filter.to)) : formatYearMonth(new Date());
 
-    const browse = `<?xml version="1.0"?>
-<columns code="030" cluster="financial" xmlns="">
-  <column id="1"><field>fin.trs.head.code</field><visible>true</visible></column>
-  <column id="2"><field>fin.trs.head.number</field><visible>true</visible></column>
-  <column id="3"><field>fin.trs.head.date</field><visible>true</visible></column>
-  <column id="4"><field>fin.trs.line.dim1</field><visible>true</visible></column>
-  <column id="5"><field>fin.trs.line.description</field><visible>true</visible></column>
-  <column id="6"><field>fin.trs.line.debitvalue</field><visible>true</visible></column>
-  <column id="7"><field>fin.trs.line.creditvalue</field><visible>true</visible></column>
-  <column id="8"><field>fin.trs.head.yearperiod</field><from>${fromYM}</from><to>${toYM}</to></column>
-  ${filter.accountCodePrefix ? `<column id="9"><field>fin.trs.line.dim1</field><from>${filter.accountCodePrefix}0</from><to>${filter.accountCodePrefix}9</to></column>` : ""}
+    const browse = `<columns code="000">
+  <column><field>fin.trs.head.code</field><visible>true</visible></column>
+  <column><field>fin.trs.head.number</field><visible>true</visible></column>
+  <column><field>fin.trs.head.date</field><visible>true</visible></column>
+  <column><field>fin.trs.line.dim1</field><visible>true</visible></column>
+  <column><field>fin.trs.line.description</field><visible>true</visible></column>
+  <column><field>fin.trs.line.debitvalue</field><visible>true</visible></column>
+  <column><field>fin.trs.line.creditvalue</field><visible>true</visible></column>
+  <column><field>fin.trs.head.yearperiod</field><operator>between</operator><from>${fromYM}</from><to>${toYM}</to><visible>false</visible></column>
+  ${filter.accountCodePrefix ? `<column><field>fin.trs.line.dim1</field><operator>between</operator><from>${filter.accountCodePrefix}0</from><to>${filter.accountCodePrefix}9</to><visible>false</visible></column>` : ""}
 </columns>`;
     const xml = await this.callProcessXml(office, browse);
     return parseTransactionsBrowseXml(xml, entityId);
@@ -216,28 +214,36 @@ export class TwinfieldAccountingPort implements AccountingPort {
 // vervangen we ze door een proper XML lib (fast-xml-parser) plus tests.
 
 function parsePnLFromBrowseXml(xml: string, entityId: EntityId, period: Period): PnLReport {
+  // Aggregeer signed waarde per grootboekrekening (dim1).
+  const byAccount = new Map<string, number>();
+  for (const row of parseBrowseRows(xml)) {
+    const account = row["fin.trs.line.dim1"];
+    if (!account) continue;
+    byAccount.set(account, (byAccount.get(account) ?? 0) + parseAmount(row["fin.trs.line.valuesigned"]));
+  }
+
   const lines: PnLReport["lines"] = [];
   let revenue = 0;
   let opex = 0;
   let interest = 0;
 
-  const rowRe = /<tr[\s\S]*?<\/tr>/g;
-  const rows = xml.match(rowRe) ?? [];
-  for (const row of rows) {
-    const accMatch = /<td[^>]*>(\d{4})<\/td>/.exec(row);
-    const nameMatch = /<td[^>]*>([^<]{2,})<\/td>\s*<td[^>]*>-?[\d.,]+<\/td>/.exec(row);
-    const amountMatch = /<td[^>]*>(-?[\d.,]+)<\/td>\s*<\/tr>/.exec(row);
-    if (!accMatch || !amountMatch) continue;
-
-    const account = accMatch[1]!;
-    const name = nameMatch?.[1] ?? account;
-    const amount = parseDutchNumber(amountMatch[1]!);
-
-    lines.push({ account, name, amount });
-
-    if (account.startsWith("8")) revenue += amount;
-    else if (account.startsWith("44")) interest += Math.abs(amount);
-    else if (account.startsWith("4")) opex += Math.abs(amount);
+  for (const [account, signed] of byAccount) {
+    // NL-grootboek: 8xxx = opbrengsten (credit → valuesigned negatief),
+    // 4xxx = kosten (debet → positief); rentelasten doorgaans 47xx/44xx.
+    // Balansrekeningen (0xxx/1xxx) tellen niet mee in de P&L.
+    if (account.startsWith("8")) {
+      const amount = -signed; // opbrengst positief
+      revenue += amount;
+      lines.push({ account, name: account, amount });
+    } else if (account.startsWith("47") || account.startsWith("44")) {
+      const amount = Math.abs(signed);
+      interest += amount;
+      lines.push({ account, name: account, amount });
+    } else if (account.startsWith("4")) {
+      const amount = Math.abs(signed);
+      opex += amount;
+      lines.push({ account, name: account, amount });
+    }
   }
 
   return {
@@ -257,40 +263,33 @@ function parsePnLFromBrowseXml(xml: string, entityId: EntityId, period: Period):
 }
 
 function parseBalanceSheetFromBrowseXml(xml: string, entityId: EntityId, asOf: string): BalanceSheet {
+  // Cumulatief saldo per balansrekening (dim1).
+  const byAccount = new Map<string, number>();
+  for (const row of parseBrowseRows(xml)) {
+    const account = row["fin.trs.line.dim1"];
+    if (!account) continue;
+    byAccount.set(account, (byAccount.get(account) ?? 0) + parseAmount(row["fin.trs.line.valuesigned"]));
+  }
+
   const lines: BalanceSheet["lines"] = [];
   let totalAssets = 0;
   let totalLiabilities = 0;
   let totalEquity = 0;
 
-  const rowRe = /<tr[\s\S]*?<\/tr>/g;
-  const rows = xml.match(rowRe) ?? [];
-  for (const row of rows) {
-    const accMatch = /<td[^>]*>(\d{4})<\/td>/.exec(row);
-    const nameMatch = /<td[^>]*>([^<]{2,})<\/td>/.exec(row);
-    const amountMatch = /<td[^>]*>(-?[\d.,]+)<\/td>\s*<\/tr>/.exec(row);
-    if (!accMatch || !amountMatch) continue;
-    const account = accMatch[1]!;
-    const name = nameMatch?.[1] ?? account;
-    const amount = parseDutchNumber(amountMatch[1]!);
-
+  for (const [account, amount] of byAccount) {
+    // Alleen balansrekeningen: 0xxx (vast) / 1xxx (vlottend).
+    // 07xx/08xx = langlopend vreemd vermogen (leningen), 05xx/06xx = EV.
+    if (!/^[01]/.test(account)) continue;
     let side: "asset" | "liability" | "equity";
-    if (account.startsWith("0")) {
-      const n = Number(account.slice(0, 2));
-      if (n < 5) side = "asset";
-      else side = "equity";
-    } else if (account.startsWith("1")) {
-      side = "asset";
-    } else if (account.startsWith("0700") || account.startsWith("07") || account.startsWith("08")) {
-      side = "liability";
-    } else {
-      side = "asset";
-    }
+    if (/^0[78]/.test(account)) side = "liability";
+    else if (/^0[56]/.test(account)) side = "equity";
+    else side = "asset";
 
     if (side === "asset") totalAssets += amount;
     else if (side === "liability") totalLiabilities += Math.abs(amount);
     else totalEquity += Math.abs(amount);
 
-    lines.push({ account, name, amount, side });
+    lines.push({ account, name: account, amount, side });
   }
 
   return {
@@ -322,26 +321,18 @@ function parseAccountsList(xml: string): Account[] {
 
 function parseTransactionsBrowseXml(xml: string, entityId: EntityId): Transaction[] {
   const out: Transaction[] = [];
-  const rowRe = /<tr[\s\S]*?<\/tr>/g;
-  const cells = (row: string): string[] => {
-    const tdRe = /<td[^>]*>([^<]*)<\/td>/g;
-    const result: string[] = [];
-    let mm: RegExpExecArray | null;
-    while ((mm = tdRe.exec(row)) !== null) result.push(mm[1] ?? "");
-    return result;
-  };
-  const rows = xml.match(rowRe) ?? [];
-  for (const row of rows) {
-    const c = cells(row);
-    if (c.length < 7) continue;
+  for (const row of parseBrowseRows(xml)) {
+    const code = row["fin.trs.head.code"] ?? "";
+    const number = row["fin.trs.head.number"] ?? "";
+    if (!code && !number) continue;
     out.push({
-      id: `${c[0]}-${c[1]}`,
+      id: `${code}-${number}`,
       entityId,
-      date: c[2] ?? "",
-      account: c[3] ?? "",
-      description: c[4] ?? "",
-      debit: parseDutchNumber(c[5] ?? "0"),
-      credit: parseDutchNumber(c[6] ?? "0"),
+      date: row["fin.trs.head.date"] ?? "",
+      account: row["fin.trs.line.dim1"] ?? "",
+      description: row["fin.trs.line.description"] ?? "",
+      debit: parseAmount(row["fin.trs.line.debitvalue"]),
+      credit: parseAmount(row["fin.trs.line.creditvalue"]),
       currency: "EUR",
     });
   }
@@ -379,9 +370,28 @@ function rolling12mStart(p: Period): Date {
   return new Date(end.getFullYear() - 1, end.getMonth() + 1, 1);
 }
 
-function parseDutchNumber(s: string): number {
+/**
+ * Parse een Twinfield <browse>-respons naar rijen. Elke rij is een map van
+ * veldnaam → waarde, gelezen uit <td field="...">waarde</td>. De <key>-elementen
+ * en niet-zichtbare kolommen worden genegeerd.
+ */
+function parseBrowseRows(xml: string): Record<string, string>[] {
+  const rows: Record<string, string>[] = [];
+  const trRe = /<tr>([\s\S]*?)<\/tr>/g;
+  let m: RegExpExecArray | null;
+  while ((m = trRe.exec(xml)) !== null) {
+    const cells: Record<string, string> = {};
+    const tdRe = /<td\b[^>]*\bfield="([^"]+)"[^>]*>([^<]*)<\/td>/g;
+    let c: RegExpExecArray | null;
+    while ((c = tdRe.exec(m[1]!)) !== null) cells[c[1]!] = (c[2] ?? "").trim();
+    rows.push(cells);
+  }
+  return rows;
+}
+
+// Twinfield browse-waarden gebruiken een punt-decimaal en minteken (bv. -121.00).
+function parseAmount(s: string | undefined): number {
   if (!s) return 0;
-  const cleaned = s.replace(/\./g, "").replace(",", ".").trim();
-  const n = Number(cleaned);
+  const n = Number(s.replace(/\s/g, ""));
   return Number.isFinite(n) ? n : 0;
 }

@@ -117,17 +117,15 @@ async function main(): Promise<void> {
 }
 
 function parseOfficesFromXml(xml: string): OfficeRecord[] {
+  // Twinfield-vorm: <office name="..." shortname="...">CODE</office>
+  // De office-code is de tekst-inhoud; name/shortname zijn attributen.
   const out: OfficeRecord[] = [];
-  const officeRe = /<office[^>]*?(?:code="([^"]+)")?[^>]*>([\s\S]*?)<\/office>/g;
+  const officeRe = /<office\b([^>]*)>([\s\S]*?)<\/office>/g;
   let match: RegExpExecArray | null;
   while ((match = officeRe.exec(xml)) !== null) {
-    const codeAttr = match[1];
-    const inner = match[2] ?? "";
-    const codeInner = /<code>([^<]+)<\/code>/.exec(inner)?.[1];
-    const nameInner = /<name>([^<]+)<\/name>/.exec(inner)?.[1];
-    const nameAttr = /name="([^"]+)"/.exec(match[0])?.[1];
-    const code = codeAttr ?? codeInner ?? "";
-    const name = nameInner ?? nameAttr ?? code;
+    const attrs = match[1] ?? "";
+    const code = (match[2] ?? "").trim() || /code="([^"]+)"/.exec(attrs)?.[1] || "";
+    const name = /name="([^"]+)"/.exec(attrs)?.[1] ?? code;
     if (code) out.push({ code, name });
   }
   return out;
