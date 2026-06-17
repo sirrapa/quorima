@@ -20,12 +20,14 @@ OUT="$(npm run --silent flash 2>&1)"; CODE=$?
 TAIL="$(printf '%s\n' "$OUT" | tail -n 20)"
 
 case "$CODE" in
-  0) notify "✅ Quorima daily flash OK
-$TAIL" ;;
-  2) notify "🚨 Quorima flash — KRITIEKE escalatie (run gelukt)
-$TAIL" ;;
-  *) notify "❌ Quorima flash FAILED (exit $CODE)
-$TAIL" ;;
+  0) STATUS="✅ Quorima daily flash OK" ;;
+  2) STATUS="🚨 Quorima flash — KRITIEKE escalatie (run gelukt)" ;;
+  *) STATUS="❌ Quorima flash FAILED (exit $CODE)" ;;
 esac
+
+# Altijd naar stdout (cron schrijft dit naar flash.log) + optioneel Telegram.
+printf '[%s] %s\n%s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$STATUS" "$TAIL"
+notify "$STATUS
+$TAIL"
 
 exit "$CODE"
