@@ -6,14 +6,14 @@ delen de host, de Telegram-alerting en de factuurfeed-koppeling — niet de code
 of de secrets.
 
 Onderdelen:
-- **Daily CFO flash** — Node-CLI via cron, schrijft de digest (LLM = Gemini, lage burn).
+- **Daily CFO flash** — Node-CLI via cron, schrijft de digest (LLM = OpenAI/Codex, pluggable).
 - **Dashboard** — kleine static server (127.0.0.1) achter **Cloudflare Tunnel + Access**.
 
 ---
 
 ## 0. Prerequisites op Hermes
 - Node ≥ 20 (`node -v`), git, en `cloudflared` (Cloudflare Tunnel).
-- Outbound HTTPS naar Twinfield, Google (Gemini) en Telegram.
+- Outbound HTTPS naar Twinfield, OpenAI en Telegram.
 
 ## 1. Code + dependencies
 ```bash
@@ -33,10 +33,10 @@ TWINFIELD_REDIRECT_URI=http://localhost:8080/callback
 TWINFIELD_OFFICE_VASTGOED=21007
 TWINFIELD_OFFICE_ICT=21005
 TWINFIELD_OFFICE_HOLDING=21006
-# LLM = Gemini (gratis tier, lage burn)
-QUORIMA_LLM_PROVIDER=gemini
-QUORIMA_MODEL_CFO=gemini-2.5-flash
-GEMINI_API_KEY=...
+# LLM = OpenAI/Codex (default; wisselen kan via QUORIMA_LLM_PROVIDER=gemini|anthropic)
+QUORIMA_LLM_PROVIDER=openai
+QUORIMA_MODEL_CFO=gpt-4o-mini
+OPENAI_API_KEY=...
 ```
 
 **Token-store overzetten** (geen browser op de VPS nodig): doe de eenmalige
@@ -50,7 +50,7 @@ Het refresh_token werkt overal; de VPS refresht daarna zelf headless.
 ```bash
 npm run twinfield:test     # refresh → cluster → offices (read-only)
 npm run flash:dry-run      # KPI-keten op mock, geen LLM
-npm run flash              # echte data + Gemini-briefing
+npm run flash              # echte data + OpenAI-briefing
 ```
 
 ## 4. Daily flash via cron
@@ -91,4 +91,4 @@ Dan in **Cloudflare Zero Trust → Access → Applications**: voeg
 - `.env` en `.twinfield-tokens.json` staan buiten git (gitignored). Houd ze met
   `chmod 600`.
 - Token rotatie/intrekking → herhaal de consent lokaal en kopieer opnieuw.
-- Gemini-key roteren kan los; provider wisselen = alleen `.env` aanpassen.
+- OpenAI-key roteren kan los; provider wisselen = alleen `.env` aanpassen.

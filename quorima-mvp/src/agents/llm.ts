@@ -1,9 +1,9 @@
 // Quorima — LLM-provider laag (ports/adapters).
 //
-// De CFO-agent praat tegen een vendor-onafhankelijke LlmPort. Zo kan de
-// daily flash op Hermes draaien op Gemini (gratis tier, lage burn) zonder
-// Claude-credits te verbranden, terwijl lokaal/dev desgewenst Claude of
-// OpenAI kan blijven. Kiezen via env QUORIMA_LLM_PROVIDER (default: gemini).
+// De CFO-agent praat tegen een vendor-onafhankelijke LlmPort. Zo draait de
+// daily flash op Hermes op OpenAI/Codex (default) zonder Claude-credits te
+// verbranden, terwijl je via env kunt wisselen naar Gemini (gratis tier) of
+// Anthropic. Kiezen via env QUORIMA_LLM_PROVIDER (default: openai).
 //
 // Alle adapters gebruiken fetch tegen de REST-API — geen SDK-dependencies.
 
@@ -154,9 +154,9 @@ class AnthropicLlm implements LlmPort {
   }
 }
 
-/** Selecteer de LLM-provider op basis van env QUORIMA_LLM_PROVIDER (default gemini). */
+/** Selecteer de LLM-provider op basis van env QUORIMA_LLM_PROVIDER (default openai/codex). */
 export function createLlm(): LlmPort {
-  const provider = (process.env.QUORIMA_LLM_PROVIDER ?? "gemini").toLowerCase();
+  const provider = (process.env.QUORIMA_LLM_PROVIDER ?? "openai").toLowerCase();
   switch (provider) {
     case "gemini":
     case "google":
