@@ -47,13 +47,18 @@ export function evaluateVastgoedEscalations(
     });
   }
 
-  // Rule 2 — Refi runway < 6 mnd én DSCR < 1.0 → crisis-protocol
+  // Rule 2 — refinanciering rood (korte runway óf hoge WACC) én DSCR < 1.0 → crisis
+  // Benoem de echte trigger: bij onbekende repricing-datum is WACC de driver,
+  // niet de (oneindige) runway.
+  const refiDriver = Number.isFinite(refi.earliestRepricingMonths)
+    ? `Refi-runway ${refi.earliestRepricingMonths.toFixed(1)} mnd`
+    : `WACC ${(refi.wacc * 100).toFixed(2)}% (repricing-datum onbekend)`;
   if (refi.status === "red" && dscr.status === "red") {
     out.push({
       level: "critical",
       rule: "vastgoed.refi.crisis_protocol",
       message:
-        `Refi-runway ${refi.earliestRepricingMonths.toFixed(1)} mnd én DSCR ${dscr.value}. ` +
+        `${refiDriver} én DSCR ${dscr.value}. ` +
         `Crisis-protocol: lender-gesprek deze week, refi-roadmap binnen 30 dagen.`,
       recipients: [...ctx.recipients.cfo, ...ctx.recipients.ceo],
     });
@@ -61,9 +66,7 @@ export function evaluateVastgoedEscalations(
     out.push({
       level: "warning",
       rule: "vastgoed.refi.short_runway",
-      message:
-        `Refi-runway ${refi.earliestRepricingMonths.toFixed(1)} mnd of WACC ${(refi.wacc * 100).toFixed(2)}% — ` +
-        `start lender-onderzoek deze maand.`,
+      message: `${refiDriver} — start lender-onderzoek deze maand.`,
       recipients: ctx.recipients.cfo,
     });
   }

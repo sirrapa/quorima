@@ -38,9 +38,12 @@ export function renderDeterministicFlash(input: VastgoedFlash): string {
       `- ${STATUS_EMOJI[input.noi.status]} **NOI** ${eu(input.noi.monthly)}/mnd — geen budget geconfigureerd`,
     );
   }
+  const repricing = Number.isFinite(input.refi.earliestRepricingMonths)
+    ? `eerstvolgende repricing in ${input.refi.earliestRepricingMonths.toFixed(1)} mnd`
+    : `repricing-datum onbekend (leningadministratie nog niet geladen)`;
   lines.push(
     `- ${STATUS_EMOJI[input.refi.status]} **Refi-runway** WACC ${(input.refi.wacc * 100).toFixed(2)}% · ` +
-      `eerstvolgende repricing in ${input.refi.earliestRepricingMonths.toFixed(1)} mnd op totaal ${eu(input.refi.totalDebt)} schuld`,
+      `${repricing} op totaal ${eu(input.refi.totalDebt)} schuld`,
   );
   lines.push("");
 

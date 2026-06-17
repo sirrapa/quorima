@@ -89,7 +89,10 @@ export class CFOAgent {
     lines.push("");
     lines.push("=== Refi runway ===");
     lines.push(`  WACC schuld: ${(input.refi.wacc * 100).toFixed(2)}%`);
-    lines.push(`  Earliest repricing trigger: ${input.refi.earliestRepricingMonths.toFixed(1)} months`);
+    const repricing = Number.isFinite(input.refi.earliestRepricingMonths)
+      ? `${input.refi.earliestRepricingMonths.toFixed(1)} months`
+      : "unknown — no repricing/end date loaded yet (NOT 'no refinancing possible'; just missing loan-admin metadata)";
+    lines.push(`  Earliest repricing trigger: ${repricing}`);
     lines.push(`  Total debt: €${fmt(input.refi.totalDebt)}`);
     lines.push(`  status: ${input.refi.status}`);
     lines.push("");
