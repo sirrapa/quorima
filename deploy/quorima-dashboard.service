@@ -1,0 +1,15 @@
+[Unit]
+Description=Quorima dashboard (static, lokaal voor Cloudflare Tunnel)
+After=network.target
+
+[Service]
+Type=simple
+User=hermes
+WorkingDirectory=/home/hermes/quorima
+ExecStart=/usr/bin/node /home/hermes/quorima/deploy/serve-dashboard.mjs
+Environment=DASH_PORT=8787
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

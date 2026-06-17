@@ -1,0 +1,8 @@
+# Quorima daily CFO flash — werkdagen 08:00 (host-tijdzone Europe/Amsterdam).
+# Installeer met:  crontab -e   (en plak de regel hieronder)
+#
+# Optioneel Telegram-alert: zet deze twee in de crontab-env (boven de regel):
+# TELEGRAM_BOT_TOKEN=123:abc
+# TELEGRAM_CHAT_ID=123456
+
+0 8 * * 1-5 /home/hermes/quorima/deploy/run-flash.sh >> /home/hermes/quorima/deploy/flash.log 2>&1

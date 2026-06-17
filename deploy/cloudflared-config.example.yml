@@ -1,0 +1,14 @@
+# Cloudflare Tunnel config voor Hermes — ~/.cloudflared/config.yml
+# Geen reverse proxy, geen open poorten. cloudflared verbindt lokaal met de
+# dashboard-server (127.0.0.1:8787) en publiceert die op je hostname.
+#
+# Zet Cloudflare Access (Zero Trust) op de hostname zodat ALLEEN jouw e-mail
+# erbij kan — het dashboard toont echte financiële cijfers.
+
+tunnel: <TUNNEL-ID>
+credentials-file: /home/hermes/.cloudflared/<TUNNEL-ID>.json
+
+ingress:
+  - hostname: quorima.jouwdomein.nl
+    service: http://127.0.0.1:8787
+  - service: http_status:404
