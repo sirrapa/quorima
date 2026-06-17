@@ -1,0 +1,43 @@
+// Naam-gebaseerde rekening-classificatie voor het Twinfield-rekeningschema van
+// de Sirrapa-administraties (gedeeld template). Robuuster dan kale code-prefixes:
+// de echte rekeningnamen bepalen de KPI-categorie. Bevestigd op office 21007
+// (Vastgoed — Chaletpark De Wierde), waar leningen in 16xx staan i.p.v. 07/08.
+
+export type PnlCategory = "revenue" | "interest" | "depreciation" | "tax" | "opex" | "ignore";
+
+/**
+ * Classificeer een grootboekrekening voor de P&L op basis van code + naam.
+ * - omzet: 8xxx (bv. "Omzet Verhuur", "Omzet Chaletpark de Wierde")
+ * - rente (debt service): kostenrekening met naam die met "rente" begint,
+ *   behalve belastingrente (bv. "Rente leningen Mogelijk", "Rente lening Collin")
+ * - afschrijving / vpb apart; de rest is operationele kosten (voor NOI).
+ */
+export function classifyPnl(code: string, name = ""): PnlCategory {
+  const n = name.toLowerCase().trim();
+  if (code.startsWith("8")) return "revenue";
+  if (!/^[4567]/.test(code)) return "ignore"; // geen P&L-kostenrekening
+  if (n.startsWith("afschrijving")) return "depreciation";
+  if (n.includes("vennootschapsbelasting")) return "tax";
+  if (n.startsWith("rente") && !n.includes("belasting")) return "interest";
+  return "opex";
+}
+
+/**
+ * Balansrekening die een leninghoofdsom vertegenwoordigt (langlopend vreemd
+ * vermogen). Sluit rekening-courant, cumulatieve aflossing en de
+ * kortlopende-aflossing-reclass uit.
+ */
+export function isLoanPrincipalAccount(name = ""): boolean {
+  const n = name.toLowerCase().trim();
+  if (!n) return false;
+  if (n.includes("rekening-courant")) return false;
+  if (n.startsWith("cumulatieve aflossing")) return false;
+  if (n.startsWith("afl. lopend jr")) return false;
+  if (n.startsWith("aflossingsverplichting")) return false;
+  return n.includes("lening") || n.startsWith("mogelijk");
+}
+
+/** Balansrekening met de aflossing van het lopende jaar ("afl. lopend jr ..."). */
+export function isCurrentPrincipalAccount(name = ""): boolean {
+  return name.toLowerCase().trim().startsWith("afl. lopend jr");
+}

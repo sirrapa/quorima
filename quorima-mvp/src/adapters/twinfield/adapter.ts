@@ -29,6 +29,11 @@ import type {
 } from "../../types.js";
 import type { AccountingPort, TxFilter } from "../../ports/accounting.js";
 import { getValidAccessContext, type OAuthClientConfig } from "./oauth.js";
+import {
+  classifyPnl,
+  isCurrentPrincipalAccount,
+  isLoanPrincipalAccount,
+} from "./account-classify.js";
 
 export interface TwinfieldConfig extends OAuthClientConfig {
   /** pad naar de lokale token-store met het refresh_token (gitignored) */
@@ -38,6 +43,7 @@ export interface TwinfieldConfig extends OAuthClientConfig {
 export class TwinfieldAccountingPort implements AccountingPort {
   private processXmlClient: soap.Client | null = null;
   private clientClusterUrl: string | null = null;
+  private namesByOffice = new Map<string, Map<string, string>>();
 
   constructor(private config: TwinfieldConfig) {}
 
@@ -76,6 +82,29 @@ export class TwinfieldAccountingPort implements AccountingPort {
     return result.ProcessXmlStringResult as string;
   }
 
+  /**
+   * Grootboekrekening-namen (code → naam) per office, uit de dimensie-lijst.
+   * Nodig om P&L- en lening-rekeningen op naam te classificeren i.p.v. op
+   * een aangenomen code-prefix. Gecached per office.
+   */
+  private async ensureNames(office: string): Promise<Map<string, string>> {
+    const cached = this.namesByOffice.get(office);
+    if (cached) return cached;
+    const names = new Map<string, string>();
+    for (const dimtype of ["BAS", "PNL"]) {
+      const xml = await this.callProcessXml(
+        office,
+        `<list><type>dimensions</type><office>${office}</office><dimtype>${dimtype}</dimtype></list>`,
+      );
+      // Twinfield-vorm: <dimension name="..." shortname="">CODE</dimension>
+      for (const m of xml.matchAll(/<dimension[^>]*\bname="([^"]*)"[^>]*>([^<]+)<\/dimension>/g)) {
+        names.set(m[2]!.trim(), m[1]!);
+      }
+    }
+    this.namesByOffice.set(office, names);
+    return names;
+  }
+
   // ─── Public AccountingPort interface ────────────────────────────────
 
   async listEntities(): Promise<Entity[]> {
@@ -111,10 +140,14 @@ export class TwinfieldAccountingPort implements AccountingPort {
   async getPnL(entityId: EntityId, period: Period): Promise<PnLReport> {
     const office = officeFromEntityId(entityId);
 
-    // Browse XML voor een rolling 12m P&L: vraag alle entries op
-    // grootboekrekeningen met type "income" of "expense".
-    const fromYM = formatYearMonth(rolling12mStart(period));
-    const toYM = formatYearMonth(periodEndDate(period));
+    // Echt rollend 12-maands venster, eindigend op de huidige maand
+    // (nooit in de toekomst — anders mist YTD-data het voorgaande jaar).
+    const periodEnd = periodEndDate(period);
+    const now = new Date();
+    const end = periodEnd < now ? periodEnd : now;
+    const start = new Date(end.getFullYear(), end.getMonth() - 11, 1);
+    const fromYM = formatYearMonth(start);
+    const toYM = formatYearMonth(end);
 
     // Twinfield browse code 000 = grootboektransacties. Eén regel per
     // transactieregel; we aggregeren client-side per rekening (dim1).
@@ -125,8 +158,11 @@ export class TwinfieldAccountingPort implements AccountingPort {
   <column><field>fin.trs.head.yearperiod</field><operator>between</operator><from>${fromYM}</from><to>${toYM}</to><visible>false</visible></column>
 </columns>`;
 
-    const xml = await this.callProcessXml(office, browse);
-    return parsePnLFromBrowseXml(xml, entityId, period);
+    const [xml, names] = await Promise.all([
+      this.callProcessXml(office, browse),
+      this.ensureNames(office),
+    ]);
+    return parsePnLFromBrowseXml(xml, names, entityId, period);
   }
 
   async getBalanceSheet(entityId: EntityId, asOf: string): Promise<BalanceSheet> {
@@ -173,31 +209,57 @@ export class TwinfieldAccountingPort implements AccountingPort {
   }
 
   async deriveLoanRegister(entityId: EntityId): Promise<Loan[]> {
-    // Twinfield zonder Vastgoed-module bevat geen gestructureerd
-    // leningenregister. We synthetiseren uit:
-    //   - balans-rekeningen onder prefix 07xx / 08xx (saldo per lening)
-    //   - rentelasten-grootboek 4400-range, gegroepeerd per cost-center
-    //     (cost-center vertegenwoordigt typisch de lening)
-    //
-    // Voor de MVP-bootstrap: lever een minimal schema en laat de
-    // integrator tijdens wizard stap 3d eenmalig de rate +
-    // nextRepricingDate per lening aanvullen. Dat aanvulrecord wordt
-    // opgeslagen in Quorima's eigen contract-store.
-    const bs = await this.getBalanceSheet(entityId, new Date().toISOString().slice(0, 10));
-    const candidates = bs.lines.filter(
-      (l) => /^0[78]/.test(l.account) && l.side === "liability" && Math.abs(l.amount) > 0,
-    );
-    return candidates.map((l) => ({
-      id: `loan-${l.account}`,
-      lender: l.name,
-      balance: Math.abs(l.amount),
-      currency: bs.currency,
-      // Defaults — overgeschreven door integrator-mapping (TODO: load Quorima contract-store)
-      rate: 0.06,
-      nextRepricingDate: null,
-      fixedPeriodEnd: null,
-      monthlyPrincipal: 0,
-    }));
+    // Leningen staan in deze administratie niet op 07/08 maar als benoemde
+    // 16xx-rekeningen (bv. "Lening Collin Crowdfund", "Mogelijk ... kavel").
+    // We detecteren ze op naam (zie account-classify) i.p.v. op code-prefix:
+    //   - hoofdsom  → totale schuld
+    //   - "afl. lopend jr ..." → jaaraflossing (principal voor DSCR)
+    //   - rente uit de P&L → gewogen rente (WACC)
+    const office = officeFromEntityId(entityId);
+    const ym = formatYearMonth(new Date());
+    const browse = `<columns code="000">
+  <column><field>fin.trs.line.dim1</field><visible>true</visible></column>
+  <column><field>fin.trs.line.valuesigned</field><visible>true</visible></column>
+  <column><field>fin.trs.head.yearperiod</field><operator>between</operator><from>2000/00</from><to>${ym}</to><visible>false</visible></column>
+</columns>`;
+    const [xml, names] = await Promise.all([
+      this.callProcessXml(office, browse),
+      this.ensureNames(office),
+    ]);
+
+    let totalBalance = 0;
+    let annualPrincipal = 0;
+    let loanAccounts = 0;
+    for (const [account, amount] of aggregateByAccount(xml)) {
+      const name = names.get(account) ?? account;
+      if (isLoanPrincipalAccount(name) && Math.abs(amount) > 0) {
+        totalBalance += Math.abs(amount);
+        loanAccounts += 1;
+      } else if (isCurrentPrincipalAccount(name)) {
+        annualPrincipal += Math.abs(amount);
+      }
+    }
+    if (totalBalance === 0) return [];
+
+    // Gewogen rente uit de rentelasten in de P&L (rolling 12m).
+    const pnl = await this.getPnL(entityId, { year: new Date().getFullYear(), period: "FY" });
+    const portfolioRate = pnl.totals.interestExpense / totalBalance;
+
+    // Eén geaggregeerde lening-regel die de KPI-sommen correct voedt
+    // (totaal saldo, jaaraflossing, gewogen rente). Per-lening detail en
+    // repricing-datums volgen uit de leningadministratie/contract-store.
+    return [
+      {
+        id: `loan-portfolio-${office}`,
+        lender: `Leningen (${loanAccounts} hoofdsom-rekeningen)`,
+        balance: totalBalance,
+        currency: "EUR",
+        rate: portfolioRate,
+        nextRepricingDate: null,
+        fixedPeriodEnd: null,
+        monthlyPrincipal: annualPrincipal / 12,
+      },
+    ];
   }
 
   async deriveRentRoll(_entityId: EntityId): Promise<Tenancy[]> {
@@ -213,37 +275,34 @@ export class TwinfieldAccountingPort implements AccountingPort {
 // Voor de MVP zijn dit minimal-effort regex-based parsers. In productie
 // vervangen we ze door een proper XML lib (fast-xml-parser) plus tests.
 
-function parsePnLFromBrowseXml(xml: string, entityId: EntityId, period: Period): PnLReport {
-  // Aggregeer signed waarde per grootboekrekening (dim1).
-  const byAccount = new Map<string, number>();
-  for (const row of parseBrowseRows(xml)) {
-    const account = row["fin.trs.line.dim1"];
-    if (!account) continue;
-    byAccount.set(account, (byAccount.get(account) ?? 0) + parseAmount(row["fin.trs.line.valuesigned"]));
-  }
-
+function parsePnLFromBrowseXml(
+  xml: string,
+  names: Map<string, string>,
+  entityId: EntityId,
+  period: Period,
+): PnLReport {
   const lines: PnLReport["lines"] = [];
   let revenue = 0;
   let opex = 0;
   let interest = 0;
+  let depreciation = 0;
+  let tax = 0;
 
-  for (const [account, signed] of byAccount) {
-    // NL-grootboek: 8xxx = opbrengsten (credit → valuesigned negatief),
-    // 4xxx = kosten (debet → positief); rentelasten doorgaans 47xx/44xx.
-    // Balansrekeningen (0xxx/1xxx) tellen niet mee in de P&L.
-    if (account.startsWith("8")) {
-      const amount = -signed; // opbrengst positief
-      revenue += amount;
-      lines.push({ account, name: account, amount });
-    } else if (account.startsWith("47") || account.startsWith("44")) {
-      const amount = Math.abs(signed);
-      interest += amount;
-      lines.push({ account, name: account, amount });
-    } else if (account.startsWith("4")) {
-      const amount = Math.abs(signed);
-      opex += amount;
-      lines.push({ account, name: account, amount });
+  for (const [account, signed] of aggregateByAccount(xml)) {
+    const name = names.get(account) ?? account;
+    const category = classifyPnl(account, name);
+    if (category === "ignore") continue;
+    // Opbrengsten staan credit (valuesigned negatief) → positief maken;
+    // kosten staan debet (positief).
+    const amount = category === "revenue" ? -signed : Math.abs(signed);
+    switch (category) {
+      case "revenue": revenue += amount; break;
+      case "interest": interest += amount; break;
+      case "depreciation": depreciation += amount; break;
+      case "tax": tax += amount; break;
+      default: opex += amount;
     }
+    lines.push({ account, name, amount });
   }
 
   return {
@@ -255,22 +314,15 @@ function parsePnLFromBrowseXml(xml: string, entityId: EntityId, period: Period):
       revenue,
       operatingExpenses: opex,
       interestExpense: interest,
-      depreciation: 0, // TODO: pull from 03xx-range when needed
-      tax: 0,
-      netResult: revenue - opex - interest,
+      depreciation,
+      tax,
+      netResult: revenue - opex - interest - depreciation - tax,
     },
   };
 }
 
 function parseBalanceSheetFromBrowseXml(xml: string, entityId: EntityId, asOf: string): BalanceSheet {
-  // Cumulatief saldo per balansrekening (dim1).
-  const byAccount = new Map<string, number>();
-  for (const row of parseBrowseRows(xml)) {
-    const account = row["fin.trs.line.dim1"];
-    if (!account) continue;
-    byAccount.set(account, (byAccount.get(account) ?? 0) + parseAmount(row["fin.trs.line.valuesigned"]));
-  }
-
+  const byAccount = aggregateByAccount(xml);
   const lines: BalanceSheet["lines"] = [];
   let totalAssets = 0;
   let totalLiabilities = 0;
@@ -365,11 +417,6 @@ function periodEndDate(p: Period): Date {
   return new Date(p.year, p.period as number, 0);
 }
 
-function rolling12mStart(p: Period): Date {
-  const end = periodEndDate(p);
-  return new Date(end.getFullYear() - 1, end.getMonth() + 1, 1);
-}
-
 /**
  * Parse een Twinfield <browse>-respons naar rijen. Elke rij is een map van
  * veldnaam → waarde, gelezen uit <td field="...">waarde</td>. De <key>-elementen
@@ -394,4 +441,15 @@ function parseAmount(s: string | undefined): number {
   if (!s) return 0;
   const n = Number(s.replace(/\s/g, ""));
   return Number.isFinite(n) ? n : 0;
+}
+
+// Aggregeer een browse-respons tot signed saldo per grootboekrekening (dim1).
+function aggregateByAccount(xml: string): Map<string, number> {
+  const byAccount = new Map<string, number>();
+  for (const row of parseBrowseRows(xml)) {
+    const account = row["fin.trs.line.dim1"];
+    if (!account) continue;
+    byAccount.set(account, (byAccount.get(account) ?? 0) + parseAmount(row["fin.trs.line.valuesigned"]));
+  }
+  return byAccount;
 }
