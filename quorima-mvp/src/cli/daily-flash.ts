@@ -134,13 +134,11 @@ async function main(): Promise<void> {
     markdown = renderDeterministicFlash(flash);
     log("  digest rendered (deterministic)");
   } else {
-    const apiKey = requireEnv("ANTHROPIC_API_KEY");
-    const model = process.env.QUORIMA_MODEL_CFO ?? "claude-opus-4-6";
-    const cfo = new CFOAgent({ apiKey, model });
-    log(`  calling ${model}…`);
+    const cfo = new CFOAgent();
+    log(`  calling ${cfo.provider}:${cfo.model}…`);
     const out = await cfo.writeDailyFlash(flash);
     markdown = out.markdown;
-    log(`  digest rendered (LLM, ${out.usage.input_tokens} in / ${out.usage.output_tokens} out tokens)`);
+    log(`  digest rendered (LLM, ${out.usage.inputTokens ?? "?"} in / ${out.usage.outputTokens ?? "?"} out tokens)`);
   }
 
   // 7. Persist

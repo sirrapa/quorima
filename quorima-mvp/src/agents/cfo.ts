@@ -1,10 +1,10 @@
 // Quorima — CFO agent
-// Wraps Claude Opus 4.6 met de Vastgoed-context en KPI library.
-// De agent krijgt al berekende KPIs en schrijft daar één coherente
+// Wraps een LLM (vendor-onafhankelijk, zie llm.ts) met de Vastgoed-context en
+// KPI library. De agent krijgt al berekende KPIs en schrijft daar één coherente
 // "daily flash" briefing van — geen eigen calculaties, geen verzonnen
 // cijfers (prime directive uit de CFO-prompt).
 
-import Anthropic from "@anthropic-ai/sdk";
+import { createLlm, type LlmPort, type LlmUsage } from "./llm.js";
 import type { VastgoedFlash } from "../types.js";
 
 const SYSTEM_PROMPT = `
@@ -28,45 +28,39 @@ Length: max ~250 words total. If the situation is calm, write less.
 `.trim();
 
 export interface CFOAgentOptions {
-  apiKey: string;
-  model?: string;
+  /** LLM-port; default leest QUORIMA_LLM_PROVIDER uit env (gemini/openai/anthropic). */
+  llm?: LlmPort;
   maxTokens?: number;
 }
 
 export class CFOAgent {
-  private client: Anthropic;
-  private model: string;
+  private llm: LlmPort;
   private maxTokens: number;
 
-  constructor(opts: CFOAgentOptions) {
-    this.client = new Anthropic({ apiKey: opts.apiKey });
-    this.model = opts.model ?? "claude-opus-4-8";
+  constructor(opts: CFOAgentOptions = {}) {
+    this.llm = opts.llm ?? createLlm();
     this.maxTokens = opts.maxTokens ?? 1500;
   }
 
-  async writeDailyFlash(input: VastgoedFlash): Promise<{ markdown: string; usage: Anthropic.Usage }> {
+  get provider(): string {
+    return this.llm.provider;
+  }
+  get model(): string {
+    return this.llm.model;
+  }
+
+  async writeDailyFlash(input: VastgoedFlash): Promise<{ markdown: string; usage: LlmUsage }> {
     const userPayload = this.formatInput(input);
 
-    const response = await this.client.messages.create({
-      model: this.model,
-      max_tokens: this.maxTokens,
+    const result = await this.llm.complete({
       system: SYSTEM_PROMPT,
-      messages: [
-        {
-          role: "user",
-          content: `Write today's Sirrapa Vastgoed flash digest. Here is all the grounded data:\n\n${userPayload}`,
-        },
-      ],
+      user: `Write today's Sirrapa Vastgoed flash digest. Here is all the grounded data:\n\n${userPayload}`,
+      maxTokens: this.maxTokens,
     });
 
-    const text = response.content
-      .filter((b): b is Anthropic.TextBlock => b.type === "text")
-      .map((b) => b.text)
-      .join("\n\n");
-
     return {
-      markdown: text,
-      usage: response.usage,
+      markdown: result.text,
+      usage: result.usage,
     };
   }
 
