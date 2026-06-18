@@ -21,6 +21,9 @@ quorima-mvp/output/
 # Alleen de .example-versie wordt gecommit.
 dashboard/data/invoice-overview.json
 
+# Telegram-config voor de flash-wrapper (bot token / chat / topic) — lokaal op de VPS
+deploy/telegram.env
+
 # Editor / OS
 .DS_Store
 .vscode/

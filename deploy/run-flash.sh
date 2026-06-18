@@ -8,11 +8,15 @@ set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 cd "$HERE/../quorima-mvp"
 
-# Optioneel: zet TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID in de cron-env.
+# Optionele Telegram-config uit een gitignored bestand (niet in de repo):
+#   TELEGRAM_BOT_TOKEN=...   TELEGRAM_CHAT_ID=...   TELEGRAM_THREAD_ID=...(topic)
+[ -f "$HERE/telegram.env" ] && . "$HERE/telegram.env"
+
 notify() {
   [ -n "${TELEGRAM_BOT_TOKEN:-}" ] && [ -n "${TELEGRAM_CHAT_ID:-}" ] || return 0
   curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
     --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+    ${TELEGRAM_THREAD_ID:+--data-urlencode "message_thread_id=${TELEGRAM_THREAD_ID}"} \
     --data-urlencode "text=$1" >/dev/null || true
 }
 
