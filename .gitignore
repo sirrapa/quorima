@@ -21,6 +21,10 @@ quorima-mvp/output/
 # Alleen de .example-versie wordt gecommit.
 dashboard/data/invoice-overview.json
 
+# Live KPI-feed (echte DSCR/NOI/schuld) — de flash-pipeline schrijft dit.
+# Alleen de .example-versie wordt gecommit (zelfde reden: publieke repo).
+dashboard/data/kpi-overview.json
+
 # Telegram-config voor de flash-wrapper (bot token / chat / topic) — lokaal op de VPS
 deploy/telegram.env
 

@@ -72,24 +72,24 @@ h2{font-size:14px;font-weight:700;color:var(--muted);margin:30px 0 10px;text-tra
   </svg>
   <div>
     <h1>Quorima - Management dashboard</h1>
-    <p class="sub">Sirrapa Group Holding B.V. &middot; momentopname 14 juni 2026</p>
+    <p class="sub" id="snapshot-sub">Sirrapa Group Holding B.V. &middot; momentopname 14 juni 2026</p>
   </div>
 </header>
 
 <div class="note">
-  <span>Statische momentopname. Connectors zijn nog niet gekoppeld (OAuth pending), dus KPI-waarden zijn targets of mock uit de CFO-MVP (27 apr 2026). De openstaande facturen komen wel uit een echte feed: het Hermes Gmail-factuuroverzicht (<code>data/invoice-overview.json</code>). Conform de CFO-regel: geen cijfer zonder bron.</span>
+  <span id="banner-note">Statische momentopname. Connectors zijn nog niet gekoppeld (OAuth pending), dus KPI-waarden zijn targets of mock uit de CFO-MVP (27 apr 2026). De openstaande facturen komen wel uit een echte feed: het Hermes Gmail-factuuroverzicht (<code>data/invoice-overview.json</code>). Conform de CFO-regel: geen cijfer zonder bron.</span>
 </div>
 
 <div class="metrics">
   <div class="metric"><div class="lab">Board-agents</div><div class="val">5 actief</div></div>
-  <div class="metric"><div class="lab">Connectors live</div><div class="val">0 / 5</div></div>
+  <div class="metric"><div class="lab">Connectors live</div><div class="val" id="connectors-live">0 / 5</div></div>
   <div class="metric"><div class="lab">Open flags</div><div class="val" id="flag-count">6</div></div>
   <div class="metric"><div class="lab">Billing-trial</div><div class="val" style="color:var(--amber)">verlopen</div></div>
 </div>
 
 <h2>Flags en escalaties</h2>
 <div class="card" id="flags">
-  <div class="flag"><span class="chip c-red">Kritiek</span><div><div class="t">Vastgoed DSCR 0,80 onder 1,0 en refi-runway 4,6 mnd</div><div class="s">CFO &middot; covenant en herfinanciering &middot; mock 27 apr</div></div></div>
+  <div class="flag"><span class="chip c-red">Kritiek</span><div><div class="t" id="flag-vastgoed">Vastgoed DSCR 0,80 onder 1,0 en refi-runway 4,6 mnd</div><div class="s" id="flag-vastgoed-s">CFO &middot; covenant en herfinanciering &middot; mock 27 apr</div></div></div>
   <div class="flag"><span class="chip c-amber">Let op</span><div><div class="t">Billing-trial verlopen op 26 mei 2026</div><div class="s">ops &middot; tenant-config</div></div></div>
   <div class="flag"><span class="chip c-amber">Let op</span><div><div class="t">UK: Q1-2026 Heads of Terms-milestone niet aantoonbaar gehaald</div><div class="s">CEO &middot; acquisitie-fase</div></div></div>
   <div class="flag"><span class="chip c-amber">Let op</span><div><div class="t">ICT: 100% klant-concentratie</div><div class="s">CEO en CMO &middot; strategisch risico</div></div></div>
@@ -120,9 +120,9 @@ h2{font-size:14px;font-weight:700;color:var(--muted);margin:30px 0 10px;text-tra
   <div class="ent">
     <h3>Sirrapa Vastgoed B.V.</h3>
     <div class="tags"><span class="chip c-grey">CFO + CEO</span><span class="chip c-grey">Twinfield 21007</span></div>
-    <div class="kpi"><span class="dot d-red"></span><div><div class="n">DSCR 0,80</div><div class="m">rood &middot; doel 1,25 of meer &middot; mock 27 apr</div></div></div>
-    <div class="kpi"><span class="dot d-grey"></span><div><div class="n">NOI 11.483 euro/mnd</div><div class="m">geen budget geconfigureerd &middot; mock 27 apr</div></div></div>
-    <div class="kpi"><span class="dot d-red"></span><div><div class="n">Refi-runway 4,6 mnd</div><div class="m">rood &middot; WACC 6,92% &middot; mock 27 apr</div></div></div>
+    <div class="kpi"><span class="dot d-red" id="vg-dscr-dot"></span><div><div class="n" id="vg-dscr-n">DSCR 0,80</div><div class="m" id="vg-dscr-m">rood &middot; doel 1,25 of meer &middot; mock 27 apr</div></div></div>
+    <div class="kpi"><span class="dot d-grey" id="vg-noi-dot"></span><div><div class="n" id="vg-noi-n">NOI 11.483 euro/mnd</div><div class="m" id="vg-noi-m">geen budget geconfigureerd &middot; mock 27 apr</div></div></div>
+    <div class="kpi"><span class="dot d-red" id="vg-refi-dot"></span><div><div class="n" id="vg-refi-n">Refi-runway 4,6 mnd</div><div class="m" id="vg-refi-m">rood &middot; WACC 6,92% &middot; mock 27 apr</div></div></div>
   </div>
   <div class="ent">
     <h3>Sirrapa Property Group Ltd</h3>
@@ -135,7 +135,7 @@ h2{font-size:14px;font-weight:700;color:var(--muted);margin:30px 0 10px;text-tra
 
 <h2>Connectors</h2>
 <div class="pills">
-  <span class="chip c-amber">Twinfield &middot; te koppelen</span>
+  <span class="chip c-amber" id="pill-twinfield">Twinfield &middot; te koppelen</span>
   <span class="chip c-amber">Xero &middot; te koppelen</span>
   <span class="chip c-amber">HubSpot &middot; te koppelen</span>
   <span class="chip c-amber">Ponto &middot; te koppelen</span>
@@ -201,6 +201,60 @@ h2{font-size:14px;font-weight:700;color:var(--muted);margin:30px 0 10px;text-tra
       document.getElementById('invoices').innerHTML='<div class="flag"><span class="chip c-grey">Geen feed</span><div><div class="t">Geen factuur-feed bereikbaar</div><div class="s">Hermes schrijft <code>dashboard/data/invoice-overview.json</code> (gitignored). Open via de Launch preview of een webserver (lukt niet via file://).</div></div></div>';
       document.getElementById('invoices-meta').textContent='';
     });
+})();
+</script>
+<script>
+// KPI-feed: vult de Vastgoed-kaart + connector/banner-status uit de live
+// (gitignored) kpi-overview.json. Valt terug op het .example (mock) en als
+// die ook ontbreekt blijft de statische mock in de HTML staan.
+(function(){
+  var dotCls={red:'d-red',yellow:'d-amber',green:'d-green','no-budget':'d-grey',grey:'d-grey'};
+  var word={red:'rood',yellow:'let op',green:'groen','no-budget':'geen budget',grey:'grijs'};
+  function eu(n){return n==null?'—':'€'+Math.round(n).toLocaleString('nl-NL');}
+  function num2(n){return n==null?'—':n.toLocaleString('nl-NL',{minimumFractionDigits:2,maximumFractionDigits:2});}
+  function pct(n){return n==null?'—':(n*100).toFixed(2).replace('.',',')+'%';}
+  function mnd(n){return n==null?'—':n.toFixed(1).replace('.',',')+' mnd';}
+  function set(id,txt){var el=document.getElementById(id);if(el)el.textContent=txt;}
+  function dot(id,cls){var el=document.getElementById(id);if(el)el.className='dot '+(cls||'d-grey');}
+  function apply(d,sample){
+    var live=!!(d&&d.twinfield_live)&&!sample;
+    var src=live?'live Twinfield '+(d.as_of||''):'mock';
+    var bn=document.getElementById('banner-note');
+    if(bn&&live){
+      bn.innerHTML='Vastgoed-KPI\'s komen uit een <b>live</b> Twinfield-feed (<code>data/kpi-overview.json</code>, '+(d.as_of||'')+'); overige entiteiten wachten nog op hun connector. Openstaande facturen: het Hermes Gmail-overzicht (<code>data/invoice-overview.json</code>). Conform de CFO-regel: geen cijfer zonder bron.';
+    }
+    if(d&&d.connectors_live!=null) set('connectors-live',d.connectors_live+' / '+(d.connectors_total||5));
+    if(live){
+      var pill=document.getElementById('pill-twinfield');
+      if(pill){pill.className='chip c-green';pill.textContent='Twinfield · live';}
+      set('snapshot-sub','Sirrapa Group Holding B.V. · Vastgoed live '+(d.as_of||''));
+    }
+    var vg=(d&&d.vastgoed)||{};
+    if(vg.dscr){
+      set('vg-dscr-n','DSCR '+num2(vg.dscr.value));
+      set('vg-dscr-m',(word[vg.dscr.status]||'')+' · doel ≥ 1,25 · NOI '+eu(vg.dscr.noi12m)+'/jr ÷ debt service '+eu(vg.dscr.debtService12m)+'/jr · '+src);
+      dot('vg-dscr-dot',dotCls[vg.dscr.status]);
+    }
+    if(vg.noi){
+      set('vg-noi-n','NOI '+eu(vg.noi.monthly)+'/mnd');
+      set('vg-noi-m',(vg.noi.budgetEur!=null?'vs budget '+eu(vg.noi.budgetEur)+'/mnd':'geen budget geconfigureerd')+' · '+src);
+      dot('vg-noi-dot',dotCls[vg.noi.status]);
+    }
+    if(vg.refi){
+      var known=vg.refi.earliestRepricingMonths!=null;
+      set('vg-refi-n',known?'Refi-runway '+mnd(vg.refi.earliestRepricingMonths):'Refi-runway · WACC '+pct(vg.refi.wacc));
+      set('vg-refi-m',(word[vg.refi.status]||'')+' · WACC '+pct(vg.refi.wacc)+' · '+(known?'eerstvolgende repricing':'repricing-datum onbekend')+' · '+eu(vg.refi.totalDebt)+' schuld · '+src);
+      dot('vg-refi-dot',dotCls[vg.refi.status]);
+    }
+    if(vg.dscr){
+      set('flag-vastgoed','Vastgoed DSCR '+num2(vg.dscr.value)+' onder 1,0'+(vg.refi?' · WACC '+pct(vg.refi.wacc):''));
+      set('flag-vastgoed-s','CFO · covenant en herfinanciering · '+src);
+    }
+  }
+  function getJSON(u){return fetch(u,{cache:'no-store'}).then(function(r){if(!r.ok)throw new Error(r.status);return r.json();});}
+  getJSON('./data/kpi-overview.json').then(function(d){apply(d,false);})
+    .catch(function(){return getJSON('./data/kpi-overview.example.json').then(function(d){apply(d,true);});})
+    .catch(function(){/* geen KPI-feed → statische mock in de HTML blijft staan */});
 })();
 </script>
 </body>

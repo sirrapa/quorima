@@ -148,6 +148,19 @@ async function main(): Promise<void> {
   await writeFile(outputPath, markdown, "utf-8");
   log(`  written: ${outputPath}`);
 
+  // 7b. Update the dashboard KPI feed (live runs only — never clobber the
+  //     gitignored live feed with mock/dry-run data). The cron writes this
+  //     daily so dashboard/data/kpi-overview.json stays current.
+  if (!args.mock) {
+    const { writeDashboardFeed } = await import("../digest/dashboard-feed.js");
+    const dataDir = process.env.DASHBOARD_DATA_DIR ?? resolve("../dashboard/data");
+    const feedPath = await writeDashboardFeed(flash, {
+      dataDir,
+      generatedAt: new Date().toISOString(),
+    });
+    log(`  dashboard feed: ${feedPath}`);
+  }
+
   // 8. Echo to stdout (so cron / pipe consumers can read it directly)
   if (!args.quiet) {
     console.log("\n────────────────────────────────────────");

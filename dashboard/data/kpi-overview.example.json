@@ -1,0 +1,31 @@
+{
+  "schema": "quorima.kpi-overview.v1",
+  "generated_at": "2026-04-27T23:04:00+02:00",
+  "as_of": "2026-04-27",
+  "source": "voorbeeld / sample (geen echte data)",
+  "twinfield_live": false,
+  "connectors_live": 0,
+  "connectors_total": 5,
+  "vastgoed": {
+    "dscr": {
+      "value": 0.80,
+      "status": "red",
+      "noi12m": 137796,
+      "debtService12m": 172245,
+      "interest12m": 119241,
+      "principal12m": 53004
+    },
+    "noi": {
+      "monthly": 11483,
+      "status": "no-budget",
+      "budgetEur": null,
+      "varianceVsBudget": null
+    },
+    "refi": {
+      "wacc": 0.0692,
+      "earliestRepricingMonths": 4.6,
+      "totalDebt": 1500000,
+      "status": "red"
+    }
+  }
+}
