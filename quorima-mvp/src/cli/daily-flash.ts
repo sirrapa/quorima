@@ -148,17 +148,33 @@ async function main(): Promise<void> {
   await writeFile(outputPath, markdown, "utf-8");
   log(`  written: ${outputPath}`);
 
-  // 7b. Update the dashboard KPI feed (live runs only — never clobber the
-  //     gitignored live feed with mock/dry-run data). The cron writes this
-  //     daily so dashboard/data/kpi-overview.json stays current.
+  // 7b. Update the dashboard feeds (live runs only — never clobber the
+  //     gitignored live feeds with mock/dry-run data). The cron writes these
+  //     daily so the dashboard stays current.
   if (!args.mock) {
-    const { writeDashboardFeed } = await import("../digest/dashboard-feed.js");
     const dataDir = process.env.DASHBOARD_DATA_DIR ?? resolve("../dashboard/data");
-    const feedPath = await writeDashboardFeed(flash, {
-      dataDir,
-      generatedAt: new Date().toISOString(),
-    });
+    const generatedAt = new Date().toISOString();
+
+    const { writeDashboardFeed } = await import("../digest/dashboard-feed.js");
+    const feedPath = await writeDashboardFeed(flash, { dataDir, generatedAt });
     log(`  dashboard feed: ${feedPath}`);
+
+    // Openstaande posten crediteuren + debiteuren over alle administraties.
+    const { writeOpenItemsFeed } = await import("../digest/open-items-feed.js");
+    const openItems = [];
+    for (const e of entities) {
+      try {
+        openItems.push(...(await adapter.listOpenItems(e.id)));
+      } catch (err) {
+        log(`  ⚠ open items ${e.id}: ${(err as Error).message}`);
+      }
+    }
+    const oiPath = await writeOpenItemsFeed(entities, openItems, {
+      dataDir,
+      generatedAt,
+      asOf: todayISO(),
+    });
+    log(`  open-items feed: ${oiPath} (${openItems.length} posten)`);
   }
 
   // 8. Echo to stdout (so cron / pipe consumers can read it directly)

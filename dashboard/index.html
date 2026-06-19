@@ -77,7 +77,7 @@ h2{font-size:14px;font-weight:700;color:var(--muted);margin:30px 0 10px;text-tra
 </header>
 
 <div class="note">
-  <span id="banner-note">Statische momentopname. Connectors zijn nog niet gekoppeld (OAuth pending), dus KPI-waarden zijn targets of mock uit de CFO-MVP (27 apr 2026). De openstaande facturen komen wel uit een echte feed: het Hermes Gmail-factuuroverzicht (<code>data/invoice-overview.json</code>). Conform de CFO-regel: geen cijfer zonder bron.</span>
+  <span id="banner-note">Statische momentopname. Zonder live feed zijn de KPI-waarden mock uit de CFO-MVP. Met de live Twinfield-feed komen de Vastgoed-KPI's (<code>data/kpi-overview.json</code>) en de openstaande posten crediteuren/debiteuren (<code>data/open-items.json</code>) uit de boekhouding. Conform de CFO-regel: geen cijfer zonder bron.</span>
 </div>
 
 <div class="metrics">
@@ -95,11 +95,15 @@ h2{font-size:14px;font-weight:700;color:var(--muted);margin:30px 0 10px;text-tra
   <div class="flag"><span class="chip c-amber">Let op</span><div><div class="t">ICT: 100% klant-concentratie</div><div class="s">CEO en CMO &middot; strategisch risico</div></div></div>
 </div>
 
-<h2>Openstaande facturen &middot; CFO-admin (Hermes)</h2>
-<div class="card" id="invoices">
-  <div class="flag"><span class="chip c-grey">…</span><div><div class="t">Factuur-feed laden…</div></div></div>
+<h2>Openstaande posten &middot; crediteuren &amp; debiteuren (Twinfield)</h2>
+<div class="metrics" style="margin:8px 0 0">
+  <div class="metric"><div class="lab">Te betalen &middot; crediteuren</div><div class="val" id="oi-payable" style="color:var(--red)">—</div></div>
+  <div class="metric"><div class="lab">Te ontvangen &middot; debiteuren</div><div class="val" id="oi-receivable" style="color:var(--green)">—</div></div>
 </div>
-<div class="foot" id="invoices-meta" style="margin-top:6px"></div>
+<div class="card" id="open-items">
+  <div class="flag"><span class="chip c-grey">…</span><div><div class="t">Openstaande posten laden…</div></div></div>
+</div>
+<div class="foot" id="open-items-meta" style="margin-top:6px"></div>
 
 <h2>Holding en werkmaatschappijen - must-watch KPIs</h2>
 <div class="cols">
@@ -150,56 +154,49 @@ h2{font-size:14px;font-weight:700;color:var(--muted);margin:30px 0 10px;text-tra
 
 <div class="legend">
   Legenda status: rood = onder drempel &middot; amber = let op &middot; groen = gezond &middot; grijs = geen live data.
-  Bronnen: <code>kpis/Holding_KPIs.md</code>, <code>kpis/KPIs_per_werkmaatschappij.md</code>, <code>kpis/UK_C2R_Acquisition_Phase_KPIs.md</code>, <code>wizard/sirrapa_tenant_config.example.json</code>, <code>quorima-mvp/output/flash-2026-04-27.md</code>, en de CFO-admin items uit de Gmail factuur-pipeline (MyBrain financial-control).
+  Bronnen: <code>kpis/Holding_KPIs.md</code>, <code>kpis/KPIs_per_werkmaatschappij.md</code>, <code>kpis/UK_C2R_Acquisition_Phase_KPIs.md</code>, <code>wizard/sirrapa_tenant_config.example.json</code>, de live Twinfield-feed (<code>data/kpi-overview.json</code>, <code>data/open-items.json</code>) via de Quorima flash-pipeline, en de CFO-admin items (MyBrain financial-control).
 </div>
 </div>
 <script>
 (function(){
-  var statusMap={
-    incasso:{cls:'c-info',label:'Incasso → Basecone'},
-    monitor:{cls:'c-amber',label:'Te betalen · monitor'},
-    'still-to-pay':{cls:'c-red',label:'Nog te betalen'},
-    'basecone-draft':{cls:'c-info',label:'Basecone-draft · approval'},
-    review:{cls:'c-grey',label:'Review'}
-  };
-  function eur(v){return v==null?'—':v.toLocaleString('nl-NL',{style:'currency',currency:'EUR'});}
-  function fmtDate(d){if(!d)return'';var p=d.split('-');return p[2]+'-'+p[1]+'-'+p[0];}
-  function due(d){
-    if(!d)return{txt:'geen vervaldatum',cls:'c-grey'};
-    var t=new Date();t.setHours(0,0,0,0);
-    var n=Math.round((new Date(d+'T00:00:00')-t)/86400000);
-    return{txt:n<0?Math.abs(n)+' dgn te laat':n===0?'vervalt vandaag':'over '+n+' dgn',cls:n<=0?'c-red':n<=7?'c-amber':'c-grey'};
+  // Openstaande posten (crediteuren + debiteuren) uit de live (gitignored)
+  // open-items.json, geschreven door de flash-pipeline uit Twinfield. Valt terug
+  // op het .example (mock); per-relatie netto openstaand (geen per-factuur-detail).
+  function eur(v){return v==null?'—':v.toLocaleString('nl-NL',{style:'currency',currency:'EUR',maximumFractionDigits:0});}
+  function row(side,it){
+    var chip=side==='payable'?'<span class="chip c-red">Te betalen</span>':'<span class="chip c-green">Te ontvangen</span>';
+    var sub=(it.entityName||it.entity||'')+(it.office?' &middot; '+it.office:'');
+    return '<div class="flag">'+chip+'<div><div class="t">'+(it.relation||'—')+' — '+eur(it.amount_eur)+'</div><div class="s">'+sub+'</div></div></div>';
   }
-  function render(data,sample){
-    var box=document.getElementById('invoices');
-    var inv=(data&&data.invoices)||[];
-    if(!inv.length){
-      box.innerHTML='<div class="flag"><span class="chip c-green">Leeg</span><div><div class="t">Geen openstaande facturen</div></div></div>';
-    }else{
-      box.innerHTML=inv.map(function(it){
-        var s=statusMap[it.status]||{cls:'c-grey',label:it.status||'—'};
-        var ent=it.entity?(it.entity+(it.office?' ('+it.office+')':'')):'entiteit te bevestigen';
-        var title=(it.supplier||'—')+(it.reference?' · '+it.reference:'')+' — '+eur(it.amount_eur);
-        var sub=ent+' &middot; '+(it.due_date?'vervalt '+fmtDate(it.due_date)+' &middot; '+due(it.due_date).txt:due(null).txt)+(it.note?' &middot; '+it.note:'');
-        return '<div class="flag"><span class="chip '+s.cls+'">'+s.label+'</span><div><div class="t">'+title+'</div><div class="s">'+sub+'</div></div></div>';
-      }).join('');
+  function list(items,side,limit){
+    var html=items.slice(0,limit).map(function(it){return row(side,it);}).join('');
+    if(items.length>limit){
+      var rest=items.slice(limit).reduce(function(t,i){return t+(i.amount_eur||0);},0);
+      html+='<div class="flag"><span class="chip c-grey">+'+(items.length-limit)+'</span><div><div class="t">nog '+(items.length-limit)+' relaties — '+eur(rest)+'</div></div></div>';
     }
-    var meta=document.getElementById('invoices-meta');
-    var src=data&&data.generated_at?'Bron: '+(data.source||'Hermes Gmail-pipeline')+' &middot; account '+(data.account||'—')+' &middot; gegenereerd '+new Date(data.generated_at).toLocaleString('nl-NL'):'';
+    return html;
+  }
+  function render(d,sample){
+    var box=document.getElementById('open-items');
+    var pay=(d&&d.payables)||[],rec=(d&&d.receivables)||[],t=(d&&d.totals)||{};
+    var elP=document.getElementById('oi-payable');if(elP)elP.textContent=eur(t.payable_eur);
+    var elR=document.getElementById('oi-receivable');if(elR)elR.textContent=eur(t.receivable_eur);
+    if(!pay.length&&!rec.length){
+      box.innerHTML='<div class="flag"><span class="chip c-green">Leeg</span><div><div class="t">Geen openstaande posten</div></div></div>';
+    }else{
+      box.innerHTML=list(pay,'payable',8)+list(rec,'receivable',8);
+    }
+    var meta=document.getElementById('open-items-meta');
+    var src=d&&d.generated_at?'Bron: '+(d.source||'Twinfield')+' &middot; gegenereerd '+new Date(d.generated_at).toLocaleString('nl-NL'):'';
     meta.innerHTML=(sample?'<b>Voorbeelddata</b> (geen live feed) &middot; ':'')+src;
-    var fc=document.getElementById('flag-count');
-    if(fc)fc.textContent=document.querySelectorAll('#flags .flag').length+inv.length;
+    var fc=document.getElementById('flag-count');if(fc)fc.textContent=document.querySelectorAll('#flags .flag').length;
   }
   function getJSON(url){return fetch(url,{cache:'no-store'}).then(function(r){if(!r.ok)throw new Error(r.status);return r.json();});}
-  getJSON('./data/invoice-overview.json')
-    .then(function(d){render(d,false);})
+  getJSON('./data/open-items.json').then(function(d){render(d,false);})
+    .catch(function(){return getJSON('./data/open-items.example.json').then(function(d){render(d,true);});})
     .catch(function(){
-      // Live feed (gitignored, door Hermes geschreven) ontbreekt → val terug op het voorbeeld.
-      return getJSON('./data/invoice-overview.example.json').then(function(d){render(d,true);});
-    })
-    .catch(function(){
-      document.getElementById('invoices').innerHTML='<div class="flag"><span class="chip c-grey">Geen feed</span><div><div class="t">Geen factuur-feed bereikbaar</div><div class="s">Hermes schrijft <code>dashboard/data/invoice-overview.json</code> (gitignored). Open via de Launch preview of een webserver (lukt niet via file://).</div></div></div>';
-      document.getElementById('invoices-meta').textContent='';
+      document.getElementById('open-items').innerHTML='<div class="flag"><span class="chip c-grey">Geen feed</span><div><div class="t">Geen openstaande-posten-feed bereikbaar</div><div class="s">De flash-pipeline schrijft <code>dashboard/data/open-items.json</code> (gitignored). Open via een webserver (lukt niet via file://).</div></div></div>';
+      document.getElementById('open-items-meta').textContent='';
     });
 })();
 </script>
@@ -221,7 +218,7 @@ h2{font-size:14px;font-weight:700;color:var(--muted);margin:30px 0 10px;text-tra
     var src=live?'live Twinfield '+(d.as_of||''):'mock';
     var bn=document.getElementById('banner-note');
     if(bn&&live){
-      bn.innerHTML='Vastgoed-KPI\'s komen uit een <b>live</b> Twinfield-feed (<code>data/kpi-overview.json</code>, '+(d.as_of||'')+'); overige entiteiten wachten nog op hun connector. Openstaande facturen: het Hermes Gmail-overzicht (<code>data/invoice-overview.json</code>). Conform de CFO-regel: geen cijfer zonder bron.';
+      bn.innerHTML='Vastgoed-KPI\'s komen uit een <b>live</b> Twinfield-feed (<code>data/kpi-overview.json</code>, '+(d.as_of||'')+'); overige entiteiten wachten nog op hun connector. Openstaande posten (crediteuren/debiteuren) komen uit Twinfield (<code>data/open-items.json</code>). Conform de CFO-regel: geen cijfer zonder bron.';
     }
     if(d&&d.connectors_live!=null) set('connectors-live',d.connectors_live+' / '+(d.connectors_total||5));
     if(live){

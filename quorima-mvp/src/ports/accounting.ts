@@ -8,6 +8,7 @@ import type {
   Entity,
   EntityId,
   Loan,
+  OpenItem,
   Period,
   PnLReport,
   Tenancy,
@@ -30,6 +31,12 @@ export interface AccountingPort {
   getBalanceSheet(entityId: EntityId, asOf: string): Promise<BalanceSheet>;
   listAccounts(entityId: EntityId): Promise<Account[]>;
   listTransactions(entityId: EntityId, filter: TxFilter): Promise<Transaction[]>;
+
+  /**
+   * Openstaande posten crediteuren + debiteuren per relatie, afgeleid uit
+   * het netto saldo per relatie op de controlerekeningen.
+   */
+  listOpenItems(entityId: EntityId): Promise<OpenItem[]>;
 
   /**
    * Vastgoed-specifieke afgeleiden — bouw rent-roll en loan-register op

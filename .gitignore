@@ -25,6 +25,9 @@ dashboard/data/invoice-overview.json
 # Alleen de .example-versie wordt gecommit (zelfde reden: publieke repo).
 dashboard/data/kpi-overview.json
 
+# Live openstaande-posten-feed (echte crediteuren/debiteuren-bedragen).
+dashboard/data/open-items.json
+
 # Telegram-config voor de flash-wrapper (bot token / chat / topic) — lokaal op de VPS
 deploy/telegram.env
 

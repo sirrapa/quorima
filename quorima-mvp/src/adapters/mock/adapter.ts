@@ -11,6 +11,7 @@ import type {
   Entity,
   EntityId,
   Loan,
+  OpenItem,
   Period,
   PnLReport,
   Tenancy,
@@ -80,5 +81,12 @@ export class MockAccountingPort implements AccountingPort {
   async deriveRentRoll(_entityId: EntityId): Promise<Tenancy[]> {
     const f = await this.load();
     return f.tenancies;
+  }
+
+  async listOpenItems(entityId: EntityId): Promise<OpenItem[]> {
+    return [
+      { side: "payable", entityId, office: "00000", relationCode: "2000", relationName: "Voorbeeld Leverancier A", amountEur: 1234.56 },
+      { side: "receivable", entityId, office: "00000", relationCode: "1000", relationName: "Voorbeeld Klant B", amountEur: 4321.0 },
+    ];
   }
 }

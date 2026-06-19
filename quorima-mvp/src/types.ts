@@ -167,3 +167,21 @@ export interface Escalation {
   message: string;
   recipients: string[];
 }
+
+/**
+ * Openstaande post per relatie (crediteur of debiteur). Afgeleid uit het
+ * grootboek: netto saldo per relatie op de crediteuren-/debiteuren-
+ * controlerekening. Per-factuur-detail (factuurnr/vervaldatum) is op deze
+ * Twinfield-cluster niet via processxml beschikbaar (matchstatus-browse faalt).
+ */
+export interface OpenItem {
+  side: "payable" | "receivable";
+  entityId: EntityId;
+  /** Twinfield office (administratie) */
+  office: string;
+  /** relatie-code (dim2) en -naam */
+  relationCode: string;
+  relationName: string;
+  /** EUR, positief = openstaand bedrag (te betalen resp. te ontvangen) */
+  amountEur: number;
+}

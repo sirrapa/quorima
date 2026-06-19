@@ -22,6 +22,7 @@ import type {
   Entity,
   EntityId,
   Loan,
+  OpenItem,
   Period,
   PnLReport,
   Tenancy,
@@ -45,6 +46,7 @@ export class TwinfieldAccountingPort implements AccountingPort {
   private processXmlClient: soap.Client | null = null;
   private clientClusterUrl: string | null = null;
   private namesByOffice = new Map<string, Map<string, string>>();
+  private relNamesByKey = new Map<string, Map<string, string>>();
 
   constructor(private config: TwinfieldConfig) {}
 
@@ -103,6 +105,30 @@ export class TwinfieldAccountingPort implements AccountingPort {
       }
     }
     this.namesByOffice.set(office, names);
+    return names;
+  }
+
+  /**
+   * Relatie-namen (code → naam) per office voor crediteuren (CRD) of
+   * debiteuren (DEB). Nodig om de dim2-relatie op de controlerekening te
+   * benoemen. Gecached per office+dimtype.
+   */
+  private async ensureRelationNames(
+    office: string,
+    dimtype: "CRD" | "DEB",
+  ): Promise<Map<string, string>> {
+    const key = `${office}:${dimtype}`;
+    const cached = this.relNamesByKey.get(key);
+    if (cached) return cached;
+    const names = new Map<string, string>();
+    const xml = await this.callProcessXml(
+      office,
+      `<list><type>dimensions</type><office>${office}</office><dimtype>${dimtype}</dimtype></list>`,
+    );
+    for (const m of xml.matchAll(/<dimension[^>]*\bname="([^"]*)"[^>]*>([^<]+)<\/dimension>/g)) {
+      names.set(m[2]!.trim(), m[1]!);
+    }
+    this.relNamesByKey.set(key, names);
     return names;
   }
 
@@ -207,6 +233,81 @@ export class TwinfieldAccountingPort implements AccountingPort {
 </columns>`;
     const xml = await this.callProcessXml(office, browse);
     return parseTransactionsBrowseXml(xml, entityId);
+  }
+
+  async listOpenItems(entityId: EntityId): Promise<OpenItem[]> {
+    // De crediteuren-/debiteuren-sub-administratie-browses (code 100/200) geven
+    // op deze Twinfield-cluster een server-fout. We leiden de openstaande posten
+    // daarom af uit het grootboek (code 000, dat wél werkt): het netto saldo per
+    // relatie (dim2) op de controlerekening. Een volledig betaalde relatie netto
+    // 0 → valt weg; het restsaldo per relatie = wat nog openstaat. Per-factuur-
+    // detail (factuurnr/vervaldatum) is zo niet te halen, per-relatie wél.
+    const office = officeFromEntityId(entityId);
+    const ym = formatYearMonth(new Date());
+    const browse = `<columns code="000">
+  <column><field>fin.trs.line.dim1</field><visible>true</visible></column>
+  <column><field>fin.trs.line.dim2</field><visible>true</visible></column>
+  <column><field>fin.trs.line.valuesigned</field><visible>true</visible></column>
+  <column><field>fin.trs.head.yearperiod</field><operator>between</operator><from>2000/00</from><to>${ym}</to><visible>false</visible></column>
+</columns>`;
+    const [xml, accNames, crd, deb] = await Promise.all([
+      this.callProcessXml(office, browse),
+      this.ensureNames(office),
+      this.ensureRelationNames(office, "CRD"),
+      this.ensureRelationNames(office, "DEB"),
+    ]);
+
+    // Controlerekeningen op naam detecteren (robuust over offices):
+    // "Handelscrediteuren …" = crediteuren (AP), "Debiteuren" = debiteuren (AR).
+    const apAccounts = new Set<string>();
+    const arAccounts = new Set<string>();
+    for (const [code, name] of accNames) {
+      if (/handelscrediteuren|^crediteuren/i.test(name)) apAccounts.add(code);
+      else if (/^debiteuren\b/i.test(name)) arAccounts.add(code);
+    }
+
+    const byRel = new Map<string, number>(); // key: dim1|dim2
+    for (const row of parseBrowseRows(xml)) {
+      const d1 = row["fin.trs.line.dim1"] ?? "";
+      if (!apAccounts.has(d1) && !arAccounts.has(d1)) continue;
+      const d2 = row["fin.trs.line.dim2"] ?? "";
+      const key = `${d1}|${d2}`;
+      byRel.set(key, (byRel.get(key) ?? 0) + parseAmount(row["fin.trs.line.valuesigned"]));
+    }
+
+    const items: OpenItem[] = [];
+    for (const [key, net] of byRel) {
+      if (Math.abs(net) < 0.005) continue;
+      const sep = key.indexOf("|");
+      const d1 = key.slice(0, sep);
+      const d2 = key.slice(sep + 1);
+      if (apAccounts.has(d1)) {
+        // Crediteur staat credit (valuesigned negatief) wanneer we nog moeten
+        // betalen. Een debet-saldo = vooruitbetaald/credit → geen openstaande post.
+        if (net >= 0) continue;
+        items.push({
+          side: "payable",
+          entityId,
+          office,
+          relationCode: d2,
+          relationName: crd.get(d2) || d2 || "(onbekende crediteur)",
+          amountEur: -net,
+        });
+      } else {
+        // Debiteur staat debet (positief) wanneer er nog moet worden ontvangen.
+        if (net <= 0) continue;
+        items.push({
+          side: "receivable",
+          entityId,
+          office,
+          relationCode: d2,
+          relationName: deb.get(d2) || d2 || "(onbekende debiteur)",
+          amountEur: net,
+        });
+      }
+    }
+    items.sort((a, b) => b.amountEur - a.amountEur);
+    return items;
   }
 
   async deriveLoanRegister(entityId: EntityId): Promise<Loan[]> {
