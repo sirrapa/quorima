@@ -282,27 +282,28 @@ export class TwinfieldAccountingPort implements AccountingPort {
       const d1 = key.slice(0, sep);
       const d2 = key.slice(sep + 1);
       if (apAccounts.has(d1)) {
-        // Crediteur staat credit (valuesigned negatief) wanneer we nog moeten
-        // betalen. Een debet-saldo = vooruitbetaald/credit → geen openstaande post.
-        if (net >= 0) continue;
+        // Crediteur: credit-saldo (negatief) = te betalen. Een debet-saldo
+        // (positief) = vooruitbetaald aan de crediteur (een tegoed).
         items.push({
           side: "payable",
+          kind: net < 0 ? "open" : "prepaid",
           entityId,
           office,
           relationCode: d2,
           relationName: crd.get(d2) || d2 || "(onbekende crediteur)",
-          amountEur: -net,
+          amountEur: Math.abs(net),
         });
       } else {
-        // Debiteur staat debet (positief) wanneer er nog moet worden ontvangen.
-        if (net <= 0) continue;
+        // Debiteur: debet-saldo (positief) = te ontvangen. Een credit-saldo
+        // (negatief) = vooruitontvangen van de debiteur (een schuld).
         items.push({
           side: "receivable",
+          kind: net > 0 ? "open" : "prepaid",
           entityId,
           office,
           relationCode: d2,
           relationName: deb.get(d2) || d2 || "(onbekende debiteur)",
-          amountEur: net,
+          amountEur: Math.abs(net),
         });
       }
     }

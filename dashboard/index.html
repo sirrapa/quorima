@@ -168,6 +168,13 @@ h2{font-size:14px;font-weight:700;color:var(--muted);margin:30px 0 10px;text-tra
     var sub=(it.entityName||it.entity||'')+(it.office?' &middot; '+it.office:'');
     return '<div class="flag">'+chip+'<div><div class="t">'+(it.relation||'—')+' — '+eur(it.amount_eur)+'</div><div class="s">'+sub+'</div></div></div>';
   }
+  function prepRow(it){
+    var label=it.side==='payable'?'Vooruitbetaald':'Vooruitontvangen';
+    var what=it.side==='payable'?'tegoed bij crediteur':'schuld aan debiteur';
+    var sub=(it.entityName||it.entity||'')+(it.office?' &middot; '+it.office:'')+' &middot; '+what;
+    return '<div class="flag"><span class="chip c-info">'+label+'</span><div><div class="t">'+(it.relation||'—')+' — '+eur(it.amount_eur)+'</div><div class="s">'+sub+'</div></div></div>';
+  }
+  function header(txt){return '<div class="flag"><span class="chip c-grey">·</span><div><div class="t" style="color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em">'+txt+'</div></div></div>';}
   function list(items,side,limit){
     var html=items.slice(0,limit).map(function(it){return row(side,it);}).join('');
     if(items.length>limit){
@@ -178,17 +185,22 @@ h2{font-size:14px;font-weight:700;color:var(--muted);margin:30px 0 10px;text-tra
   }
   function render(d,sample){
     var box=document.getElementById('open-items');
-    var pay=(d&&d.payables)||[],rec=(d&&d.receivables)||[],t=(d&&d.totals)||{};
+    var pay=(d&&d.payables)||[],rec=(d&&d.receivables)||[],pre=(d&&d.prepayments)||[],t=(d&&d.totals)||{};
     var elP=document.getElementById('oi-payable');if(elP)elP.textContent=eur(t.payable_eur);
     var elR=document.getElementById('oi-receivable');if(elR)elR.textContent=eur(t.receivable_eur);
-    if(!pay.length&&!rec.length){
+    if(!pay.length&&!rec.length&&!pre.length){
       box.innerHTML='<div class="flag"><span class="chip c-green">Leeg</span><div><div class="t">Geen openstaande posten</div></div></div>';
     }else{
-      box.innerHTML=list(pay,'payable',8)+list(rec,'receivable',8);
+      var html=list(pay,'payable',8)+list(rec,'receivable',8);
+      if(pre.length){
+        html+=header('Vooruitbetalingen &amp; tegoeden')+pre.slice(0,6).map(prepRow).join('');
+        if(pre.length>6){var pr=pre.slice(6).reduce(function(s,i){return s+(i.amount_eur||0);},0);html+='<div class="flag"><span class="chip c-grey">+'+(pre.length-6)+'</span><div><div class="t">nog '+(pre.length-6)+' — '+eur(pr)+'</div></div></div>';}
+      }
+      box.innerHTML=html;
     }
     var meta=document.getElementById('open-items-meta');
     var src=d&&d.generated_at?'Bron: '+(d.source||'Twinfield')+' &middot; gegenereerd '+new Date(d.generated_at).toLocaleString('nl-NL'):'';
-    meta.innerHTML=(sample?'<b>Voorbeelddata</b> (geen live feed) &middot; ':'')+src;
+    meta.innerHTML=(sample?'<b>Voorbeelddata</b> (geen live feed) &middot; ':'')+src+' &middot; <b>geboekte stand</b>: een betaling die nog niet in Twinfield is afgeletterd telt mee als openstaand.';
     var fc=document.getElementById('flag-count');if(fc)fc.textContent=document.querySelectorAll('#flags .flag').length;
   }
   function getJSON(url){return fetch(url,{cache:'no-store'}).then(function(r){if(!r.ok)throw new Error(r.status);return r.json();});}

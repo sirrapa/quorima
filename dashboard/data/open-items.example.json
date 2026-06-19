@@ -7,7 +7,10 @@
     "payable_eur": 2468.0,
     "receivable_eur": 1500.0,
     "payable_count": 2,
-    "receivable_count": 1
+    "receivable_count": 1,
+    "prepaid_payable_eur": 250.0,
+    "prepaid_receivable_eur": 0.0,
+    "prepaid_count": 1
   },
   "by_entity": [
     { "entity": "SVG", "entityName": "Sirrapa Vastgoed B.V.", "office": "21007", "payable_eur": 1234.0, "receivable_eur": 1500.0 },
@@ -19,5 +22,8 @@
   ],
   "receivables": [
     { "entity": "SVG", "entityName": "Sirrapa Vastgoed B.V.", "office": "21007", "relation": "Voorbeeld Klant C", "amount_eur": 1500.0 }
+  ],
+  "prepayments": [
+    { "entity": "SVG", "entityName": "Sirrapa Vastgoed B.V.", "office": "21007", "relation": "Voorbeeld Leverancier D", "amount_eur": 250.0, "side": "payable" }
   ]
 }

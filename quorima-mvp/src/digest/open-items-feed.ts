@@ -20,6 +20,8 @@ interface FeedRow {
   office: string;
   relation: string;
   amount_eur: number;
+  /** alleen op prepayments-rijen: payable = vooruitbetaald, receivable = vooruitontvangen */
+  side?: "payable" | "receivable";
 }
 
 export interface OpenItemsFeed {
@@ -32,6 +34,9 @@ export interface OpenItemsFeed {
     receivable_eur: number;
     payable_count: number;
     receivable_count: number;
+    prepaid_payable_eur: number;
+    prepaid_receivable_eur: number;
+    prepaid_count: number;
   };
   by_entity: Array<{
     entity: string;
@@ -42,6 +47,8 @@ export interface OpenItemsFeed {
   }>;
   payables: FeedRow[];
   receivables: FeedRow[];
+  /** vooruitbetaald aan crediteuren + vooruitontvangen van debiteuren */
+  prepayments: FeedRow[];
 }
 
 const r2 = (n: number): number => Math.round(n * 100) / 100;
@@ -62,19 +69,26 @@ export function buildOpenItemsFeed(
   });
   const byAmount = (a: FeedRow, b: FeedRow): number => b.amount_eur - a.amount_eur;
 
-  const payables = items.filter((i) => i.side === "payable").map(toRow).sort(byAmount);
-  const receivables = items.filter((i) => i.side === "receivable").map(toRow).sort(byAmount);
-  const sum = (xs: FeedRow[]): number => r2(xs.reduce((t, x) => t + x.amount_eur, 0));
+  const open = items.filter((i) => i.kind === "open");
+  const prepaid = items.filter((i) => i.kind === "prepaid");
+  const sumItems = (xs: OpenItem[]): number => r2(xs.reduce((t, i) => t + i.amountEur, 0));
+
+  const payables = open.filter((i) => i.side === "payable").map(toRow).sort(byAmount);
+  const receivables = open.filter((i) => i.side === "receivable").map(toRow).sort(byAmount);
+  const prepayments = prepaid
+    .map((i) => ({ ...toRow(i), side: i.side }))
+    .sort(byAmount);
 
   const by_entity = entities.map((e) => {
-    const ap = items.filter((i) => i.entityId === e.id && i.side === "payable");
-    const ar = items.filter((i) => i.entityId === e.id && i.side === "receivable");
+    const ap = open.filter((i) => i.entityId === e.id && i.side === "payable");
+    const ar = open.filter((i) => i.entityId === e.id && i.side === "receivable");
     return {
       entity: shortFor(e.id),
       entityName: e.legalName,
-      office: ap[0]?.office ?? ar[0]?.office ?? "",
-      payable_eur: r2(ap.reduce((t, i) => t + i.amountEur, 0)),
-      receivable_eur: r2(ar.reduce((t, i) => t + i.amountEur, 0)),
+      office:
+        items.find((i) => i.entityId === e.id)?.office ?? "",
+      payable_eur: sumItems(ap),
+      receivable_eur: sumItems(ar),
     };
   });
 
@@ -82,16 +96,20 @@ export function buildOpenItemsFeed(
     schema: "quorima.open-items.v1",
     generated_at: opts.generatedAt,
     as_of: opts.asOf,
-    source: "Twinfield · grootboek (crediteuren 1700 / debiteuren 1300) per relatie",
+    source: "Twinfield · grootboek (crediteuren 1700 / debiteuren 1300), netto per relatie",
     totals: {
-      payable_eur: sum(payables),
-      receivable_eur: sum(receivables),
+      payable_eur: sumItems(open.filter((i) => i.side === "payable")),
+      receivable_eur: sumItems(open.filter((i) => i.side === "receivable")),
       payable_count: payables.length,
       receivable_count: receivables.length,
+      prepaid_payable_eur: sumItems(prepaid.filter((i) => i.side === "payable")),
+      prepaid_receivable_eur: sumItems(prepaid.filter((i) => i.side === "receivable")),
+      prepaid_count: prepayments.length,
     },
     by_entity,
     payables,
     receivables,
+    prepayments,
   };
 }
 

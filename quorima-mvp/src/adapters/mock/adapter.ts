@@ -85,8 +85,9 @@ export class MockAccountingPort implements AccountingPort {
 
   async listOpenItems(entityId: EntityId): Promise<OpenItem[]> {
     return [
-      { side: "payable", entityId, office: "00000", relationCode: "2000", relationName: "Voorbeeld Leverancier A", amountEur: 1234.56 },
-      { side: "receivable", entityId, office: "00000", relationCode: "1000", relationName: "Voorbeeld Klant B", amountEur: 4321.0 },
+      { side: "payable", kind: "open", entityId, office: "00000", relationCode: "2000", relationName: "Voorbeeld Leverancier A", amountEur: 1234.56 },
+      { side: "payable", kind: "prepaid", entityId, office: "00000", relationCode: "2001", relationName: "Voorbeeld Leverancier C", amountEur: 250.0 },
+      { side: "receivable", kind: "open", entityId, office: "00000", relationCode: "1000", relationName: "Voorbeeld Klant B", amountEur: 4321.0 },
     ];
   }
 }

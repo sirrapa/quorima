@@ -176,12 +176,18 @@ export interface Escalation {
  */
 export interface OpenItem {
   side: "payable" | "receivable";
+  /**
+   * `open`    = normaal openstaand (crediteur te betalen / debiteur te ontvangen).
+   * `prepaid` = tegengesteld saldo: vooruitbetaald aan een crediteur (tegoed)
+   *             of vooruitontvangen van een debiteur (schuld).
+   */
+  kind: "open" | "prepaid";
   entityId: EntityId;
   /** Twinfield office (administratie) */
   office: string;
   /** relatie-code (dim2) en -naam */
   relationCode: string;
   relationName: string;
-  /** EUR, positief = openstaand bedrag (te betalen resp. te ontvangen) */
+  /** EUR, altijd positief = de omvang van het saldo */
   amountEur: number;
 }
