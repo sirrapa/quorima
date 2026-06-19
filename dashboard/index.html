@@ -56,6 +56,26 @@ h2{font-size:14px;font-weight:700;color:var(--muted);margin:30px 0 10px;text-tra
 .pills{display:flex;flex-wrap:wrap;gap:8px}
 .foot{font-size:13px;color:var(--muted);line-height:1.8}
 .legend{font-size:12px;color:var(--muted);margin-top:36px;border-top:0.5px solid var(--line);padding-top:14px}
+.metric .sub{font-size:12px;color:var(--muted);margin-top:3px}
+.oi-tile{cursor:pointer;transition:border-color .15s ease,transform .05s ease}
+.oi-tile:hover{border-color:var(--purple)}
+.oi-tile:active{transform:translateY(1px)}
+.oi-tile .val{display:flex;align-items:baseline;gap:8px}
+.oi-tile .val::after{content:"›";font-size:18px;color:var(--muted);font-weight:400}
+.modal-overlay{position:fixed;inset:0;background:rgba(10,15,28,.55);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;padding:20px;z-index:50}
+.modal-overlay[hidden]{display:none}
+.modal-panel{background:var(--card);border:0.5px solid var(--line);border-radius:14px;max-width:640px;width:100%;max-height:82vh;display:flex;flex-direction:column;box-shadow:0 24px 64px rgba(0,0,0,.4)}
+.modal-head{display:flex;align-items:center;justify-content:space-between;padding:16px 18px 10px}
+.modal-head h3{margin:0;font-size:16px;font-weight:700}
+.modal-close{background:none;border:0;font-size:26px;line-height:1;color:var(--muted);cursor:pointer;padding:0 4px}
+.modal-close:hover{color:var(--text)}
+.modal-sub{padding:0 18px 10px;font-size:13px;color:var(--muted);display:flex;gap:6px 14px;flex-wrap:wrap;align-items:baseline}
+.modal-sub b{color:var(--text)}
+.modal-body{overflow-y:auto;padding:0 18px 16px}
+.oi-row{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-top:0.5px solid var(--line);font-size:14px}
+.oi-row:first-child{border-top:0}
+.oi-row .r-ent{font-size:12px;color:var(--muted);margin-top:1px}
+.oi-row .r-amt{font-weight:700;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -97,13 +117,11 @@ h2{font-size:14px;font-weight:700;color:var(--muted);margin:30px 0 10px;text-tra
 
 <h2>Openstaande posten &middot; crediteuren &amp; debiteuren (Twinfield)</h2>
 <div class="metrics" style="margin:8px 0 0">
-  <div class="metric"><div class="lab">Te betalen &middot; crediteuren</div><div class="val" id="oi-payable" style="color:var(--red)">—</div></div>
-  <div class="metric"><div class="lab">Te ontvangen &middot; debiteuren</div><div class="val" id="oi-receivable" style="color:var(--green)">—</div></div>
+  <div class="metric oi-tile" data-cat="payable" role="button" tabindex="0"><div class="lab">Te betalen &middot; crediteuren</div><div class="val" id="oi-payable" style="color:var(--red)">—</div><div class="sub" id="oi-payable-n">laden…</div></div>
+  <div class="metric oi-tile" data-cat="receivable" role="button" tabindex="0"><div class="lab">Te ontvangen &middot; debiteuren</div><div class="val" id="oi-receivable" style="color:var(--green)">—</div><div class="sub" id="oi-receivable-n"></div></div>
+  <div class="metric oi-tile" data-cat="prepaid" role="button" tabindex="0"><div class="lab">Vooruitbetaald &middot; tegoeden</div><div class="val" id="oi-prepaid" style="color:var(--purple)">—</div><div class="sub" id="oi-prepaid-n"></div></div>
 </div>
-<div class="card" id="open-items">
-  <div class="flag"><span class="chip c-grey">…</span><div><div class="t">Openstaande posten laden…</div></div></div>
-</div>
-<div class="foot" id="open-items-meta" style="margin-top:6px"></div>
+<div class="foot" id="open-items-meta" style="margin-top:8px"></div>
 
 <h2>Holding en werkmaatschappijen - must-watch KPIs</h2>
 <div class="cols">
@@ -157,59 +175,57 @@ h2{font-size:14px;font-weight:700;color:var(--muted);margin:30px 0 10px;text-tra
   Bronnen: <code>kpis/Holding_KPIs.md</code>, <code>kpis/KPIs_per_werkmaatschappij.md</code>, <code>kpis/UK_C2R_Acquisition_Phase_KPIs.md</code>, <code>wizard/sirrapa_tenant_config.example.json</code>, de live Twinfield-feed (<code>data/kpi-overview.json</code>, <code>data/open-items.json</code>) via de Quorima flash-pipeline, en de CFO-admin items (MyBrain financial-control).
 </div>
 </div>
+<div class="modal-overlay" id="oi-modal" hidden>
+  <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="oi-modal-title">
+    <div class="modal-head"><h3 id="oi-modal-title">Detail</h3><button class="modal-close" id="oi-modal-close" aria-label="Sluiten" type="button">&times;</button></div>
+    <div class="modal-sub" id="oi-modal-sub"></div>
+    <div class="modal-body" id="oi-modal-body"></div>
+  </div>
+</div>
 <script>
 (function(){
-  // Openstaande posten (crediteuren + debiteuren) uit de live (gitignored)
-  // open-items.json, geschreven door de flash-pipeline uit Twinfield. Valt terug
-  // op het .example (mock); per-relatie netto openstaand (geen per-factuur-detail).
+  // Openstaande posten uit de live (gitignored) open-items.json (Twinfield).
+  // Tegels tonen de totalen; klik een tegel voor de volledige lijst in een modal.
+  var DATA=null;
   function eur(v){return v==null?'—':v.toLocaleString('nl-NL',{style:'currency',currency:'EUR',maximumFractionDigits:0});}
-  function row(side,it){
-    var chip=side==='payable'?'<span class="chip c-red">Te betalen</span>':'<span class="chip c-green">Te ontvangen</span>';
-    var sub=(it.entityName||it.entity||'')+(it.office?' &middot; '+it.office:'');
-    return '<div class="flag">'+chip+'<div><div class="t">'+(it.relation||'—')+' — '+eur(it.amount_eur)+'</div><div class="s">'+sub+'</div></div></div>';
+  function eur2(v){return v==null?'—':v.toLocaleString('nl-NL',{style:'currency',currency:'EUR'});}
+  function set(id,txt){var e=document.getElementById(id);if(e)e.textContent=txt;}
+  var TITLES={payable:'Te betalen · crediteuren',receivable:'Te ontvangen · debiteuren',prepaid:'Vooruitbetalingen & tegoeden'};
+  function rowsFor(cat){if(!DATA)return[];return (cat==='payable'?DATA.payables:cat==='receivable'?DATA.receivables:DATA.prepayments)||[];}
+  function openModal(cat){
+    var rows=rowsFor(cat).slice().sort(function(a,b){return (b.amount_eur||0)-(a.amount_eur||0);});
+    set('oi-modal-title',TITLES[cat]);
+    var byEnt={};rows.forEach(function(r){var k=r.entityName||r.entity||'—';byEnt[k]=(byEnt[k]||0)+(r.amount_eur||0);});
+    var total=rows.reduce(function(t,r){return t+(r.amount_eur||0);},0);
+    document.getElementById('oi-modal-sub').innerHTML='<b>'+rows.length+' relaties &middot; '+eur2(total)+'</b>'+Object.keys(byEnt).map(function(k){return '<span>'+k+': '+eur(byEnt[k])+'</span>';}).join('');
+    document.getElementById('oi-modal-body').innerHTML=rows.map(function(r){
+      var tag=cat==='prepaid'?(r.side==='payable'?' &middot; vooruitbetaald (tegoed)':' &middot; vooruitontvangen (schuld)'):'';
+      return '<div class="oi-row"><div><div>'+(r.relation||'—')+'</div><div class="r-ent">'+(r.entityName||r.entity||'')+(r.office?' &middot; '+r.office:'')+tag+'</div></div><div class="r-amt">'+eur2(r.amount_eur)+'</div></div>';
+    }).join('')||'<div class="oi-row">Geen posten</div>';
+    document.getElementById('oi-modal').hidden=false;
   }
-  function prepRow(it){
-    var label=it.side==='payable'?'Vooruitbetaald':'Vooruitontvangen';
-    var what=it.side==='payable'?'tegoed bij crediteur':'schuld aan debiteur';
-    var sub=(it.entityName||it.entity||'')+(it.office?' &middot; '+it.office:'')+' &middot; '+what;
-    return '<div class="flag"><span class="chip c-info">'+label+'</span><div><div class="t">'+(it.relation||'—')+' — '+eur(it.amount_eur)+'</div><div class="s">'+sub+'</div></div></div>';
-  }
-  function header(txt){return '<div class="flag"><span class="chip c-grey">·</span><div><div class="t" style="color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em">'+txt+'</div></div></div>';}
-  function list(items,side,limit){
-    var html=items.slice(0,limit).map(function(it){return row(side,it);}).join('');
-    if(items.length>limit){
-      var rest=items.slice(limit).reduce(function(t,i){return t+(i.amount_eur||0);},0);
-      html+='<div class="flag"><span class="chip c-grey">+'+(items.length-limit)+'</span><div><div class="t">nog '+(items.length-limit)+' relaties — '+eur(rest)+'</div></div></div>';
-    }
-    return html;
-  }
+  function closeModal(){document.getElementById('oi-modal').hidden=true;}
   function render(d,sample){
-    var box=document.getElementById('open-items');
-    var pay=(d&&d.payables)||[],rec=(d&&d.receivables)||[],pre=(d&&d.prepayments)||[],t=(d&&d.totals)||{};
-    var elP=document.getElementById('oi-payable');if(elP)elP.textContent=eur(t.payable_eur);
-    var elR=document.getElementById('oi-receivable');if(elR)elR.textContent=eur(t.receivable_eur);
-    if(!pay.length&&!rec.length&&!pre.length){
-      box.innerHTML='<div class="flag"><span class="chip c-green">Leeg</span><div><div class="t">Geen openstaande posten</div></div></div>';
-    }else{
-      var html=list(pay,'payable',8)+list(rec,'receivable',8);
-      if(pre.length){
-        html+=header('Vooruitbetalingen &amp; tegoeden')+pre.slice(0,6).map(prepRow).join('');
-        if(pre.length>6){var pr=pre.slice(6).reduce(function(s,i){return s+(i.amount_eur||0);},0);html+='<div class="flag"><span class="chip c-grey">+'+(pre.length-6)+'</span><div><div class="t">nog '+(pre.length-6)+' — '+eur(pr)+'</div></div></div>';}
-      }
-      box.innerHTML=html;
-    }
-    var meta=document.getElementById('open-items-meta');
+    DATA=d;var t=(d&&d.totals)||{};
+    set('oi-payable',eur(t.payable_eur));set('oi-payable-n',(t.payable_count||0)+' crediteuren');
+    set('oi-receivable',eur(t.receivable_eur));set('oi-receivable-n',(t.receivable_count||0)+' debiteuren');
+    set('oi-prepaid',eur((t.prepaid_payable_eur||0)+(t.prepaid_receivable_eur||0)));set('oi-prepaid-n',(t.prepaid_count||0)+' tegoeden');
     var src=d&&d.generated_at?'Bron: '+(d.source||'Twinfield')+' &middot; gegenereerd '+new Date(d.generated_at).toLocaleString('nl-NL'):'';
-    meta.innerHTML=(sample?'<b>Voorbeelddata</b> (geen live feed) &middot; ':'')+src+' &middot; <b>geboekte stand</b>: een betaling die nog niet in Twinfield is afgeletterd telt mee als openstaand.';
+    document.getElementById('open-items-meta').innerHTML=(sample?'<b>Voorbeelddata</b> &middot; ':'')+src+' &middot; klik een tegel voor detail &middot; <b>geboekte stand</b>: een betaling die nog niet in Twinfield is afgeletterd telt mee als openstaand.';
     var fc=document.getElementById('flag-count');if(fc)fc.textContent=document.querySelectorAll('#flags .flag').length;
   }
+  [].slice.call(document.querySelectorAll('.oi-tile')).forEach(function(el){
+    var cat=el.getAttribute('data-cat');
+    el.addEventListener('click',function(){openModal(cat);});
+    el.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();openModal(cat);}});
+  });
+  document.getElementById('oi-modal-close').addEventListener('click',closeModal);
+  document.getElementById('oi-modal').addEventListener('click',function(e){if(e.target===this)closeModal();});
+  document.addEventListener('keydown',function(e){if(e.key==='Escape')closeModal();});
   function getJSON(url){return fetch(url,{cache:'no-store'}).then(function(r){if(!r.ok)throw new Error(r.status);return r.json();});}
   getJSON('./data/open-items.json').then(function(d){render(d,false);})
     .catch(function(){return getJSON('./data/open-items.example.json').then(function(d){render(d,true);});})
-    .catch(function(){
-      document.getElementById('open-items').innerHTML='<div class="flag"><span class="chip c-grey">Geen feed</span><div><div class="t">Geen openstaande-posten-feed bereikbaar</div><div class="s">De flash-pipeline schrijft <code>dashboard/data/open-items.json</code> (gitignored). Open via een webserver (lukt niet via file://).</div></div></div>';
-      document.getElementById('open-items-meta').textContent='';
-    });
+    .catch(function(){document.getElementById('open-items-meta').textContent='Geen openstaande-posten-feed bereikbaar (open via een webserver, niet file://).';});
 })();
 </script>
 <script>
