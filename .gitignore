@@ -36,5 +36,5 @@ deploy/telegram.env
 *.swo
 *~
 
-# Claude Code local settings
-.claude/settings.local.json
+# Claude Code local settings / tooling (launch.json, settings, etc.)
+.claude/
